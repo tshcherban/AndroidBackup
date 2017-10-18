@@ -47,9 +47,11 @@
     <Reference Include="System.IO.Compression" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="Protocol\Command.cs" />
     <Compile Include="Protocol\Communicator.cs" />
     <Compile Include="Protocol\GetFileListCommand.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
+    <Compile Include="Protocol\SendFileCommand.cs" />
   </ItemGroup>
   <ItemGroup>
     <None Include="packages.config" />

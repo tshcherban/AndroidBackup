@@ -1,10 +1,12 @@
 ﻿using System;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Security.Cryptography;
 using Android.App;
 using Android.Widget;
 using Android.OS;
+using Android.Text;
 using Android.Views;
 using Common.Protocol;
 
@@ -13,9 +15,9 @@ namespace FileScanner
     [Activity(Label = "FileScanner", MainLauncher = true)]
     public class MainActivity : Activity
     {
-        private EditText _phoneNumberText;
+        private TextView _text;
 
-        protected override async void OnCreate(Bundle savedInstanceState)
+        protected override void OnCreate(Bundle savedInstanceState)
         {
             base.OnCreate(savedInstanceState);
 
@@ -24,14 +26,14 @@ namespace FileScanner
 
             Window.AddFlags(WindowManagerFlags.KeepScreenOn);
 
-            _phoneNumberText = FindViewById<EditText>(Resource.Id.editText1);
+            _text = FindViewById<TextView>(Resource.Id.editText1);
             var btn = FindViewById<Button>(Resource.Id.button1);
 
-            _phoneNumberText.TextAlignment = TextAlignment.Gravity;
-            _phoneNumberText.Text = string.Join("\r\n", DriveInfo.GetDrives().Select(d => d.Name));
+            _text.TextAlignment = TextAlignment.Gravity;
+            //_text.Text = string.Join("\r\n", DriveInfo.GetDrives().Select(d => d.Name));
 
             btn.Click += BtnOnClick;
-            comm = new Communicator("10.0.2.2");
+            _communicator = new Communicator("10.0.2.2");
             return;
             using (var alg = SHA1.Create())
             {
@@ -42,25 +44,28 @@ namespace FileScanner
                         return $"{fpath}\r\n{string.Concat(sha1.Select(s => s.ToString("x")))}";
                     }).ToList();
                 var res = string.Join("\r\n", files);
-                _phoneNumberText.Text += "\r\n";
-                _phoneNumberText.Text += res;
+                _text.Text += "\r\n";
+                _text.Text += res;
             }
         }
-        Communicator comm;
+        Communicator _communicator;
         private void BtnOnClick(object sender, EventArgs e)
         {
             try
             {
-                var arg = new GetFileListRequest { RequestData = DateTime.Now.ToString("G") };
-                var response = comm.SendReceiveCommand(GetFileListCommand.Instance, arg);
-                Console.WriteLine($"Received {response.Data}");
-
-                /*var fl1 = connection.SendReceiveObject<string, FileList>("GetFileList", "FileList", 10000, null);
-                _phoneNumberText.Text = fl1.Text;*/
+                var filePath = "/storage/sdcard/dcim/file1";
+                var fileBytes = File.ReadAllBytes(filePath);
+                var data = new SendFileCommandData {Data = fileBytes};
+                var s = new Stopwatch();
+                s.Restart();
+                var resp = _communicator.SendReceiveCommand(SendFileCommand.Instance, data);
+                s.Stop();
+                var str = $"{fileBytes.Length} bytes in {s.Elapsed.TotalMilliseconds} ms ({fileBytes.Length/ s.Elapsed.TotalSeconds :F2} bytes/s)";
+                _text.Text = str;
             }
             catch (Exception exception)
             {
-                _phoneNumberText.Text = exception.ToString();
+                _text.Text = exception.ToString();
             }
         }
     }
