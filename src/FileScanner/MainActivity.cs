@@ -3,10 +3,10 @@ using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Security.Cryptography;
+using System.Threading.Tasks;
 using Android.App;
 using Android.Widget;
 using Android.OS;
-using Android.Text;
 using Android.Views;
 using Common.Protocol;
 
@@ -49,7 +49,7 @@ namespace FileScanner
             }
         }
         Communicator _communicator;
-        private void BtnOnClick(object sender, EventArgs e)
+        private async void BtnOnClick(object sender, EventArgs e)
         {
             try
             {
@@ -58,7 +58,7 @@ namespace FileScanner
                 var data = new SendFileCommandData {Data = fileBytes};
                 var s = new Stopwatch();
                 s.Restart();
-                var resp = _communicator.SendReceiveCommand(SendFileCommand.Instance, data);
+                await Task.Run(() => _communicator.SendReceiveCommand(SendFileCommand.Instance, data));
                 s.Stop();
                 var str = $"{fileBytes.Length} bytes in {s.Elapsed.TotalMilliseconds} ms ({fileBytes.Length/ s.Elapsed.TotalSeconds :F2} bytes/s)";
                 _text.Text = str;
