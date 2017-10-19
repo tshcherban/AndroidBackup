@@ -2,6 +2,7 @@
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Net;
 using System.Security.Cryptography;
 using System.Threading.Tasks;
 using Android.App;
@@ -9,6 +10,7 @@ using Android.Widget;
 using Android.OS;
 using Android.Views;
 using Common.Protocol;
+using ServiceWire.TcpIp;
 
 namespace FileScanner
 {
@@ -16,6 +18,7 @@ namespace FileScanner
     public class MainActivity : Activity
     {
         private TextView _text;
+        private IFileService proxy;
 
         protected override void OnCreate(Bundle savedInstanceState)
         {
@@ -33,7 +36,10 @@ namespace FileScanner
             //_text.Text = string.Join("\r\n", DriveInfo.GetDrives().Select(d => d.Name));
 
             btn.Click += BtnOnClick;
-            _communicator = new Communicator("10.0.2.2");
+            var serverUrl = "10.0.2.2";
+            var client = new TcpClient<IFileService>(new IPEndPoint(IPAddress.Parse(serverUrl), 9211));
+            proxy = client.Proxy;
+            
             return;
             using (var alg = SHA1.Create())
             {
@@ -48,17 +54,19 @@ namespace FileScanner
                 _text.Text += res;
             }
         }
-        Communicator _communicator;
         private async void BtnOnClick(object sender, EventArgs e)
         {
             try
             {
                 var filePath = "/storage/sdcard/dcim/file1";
                 var fileBytes = File.ReadAllBytes(filePath);
-                var data = new SendFileCommandData {Data = fileBytes};
+
+                
+                var list = proxy.GetFileList();
+                
                 var s = new Stopwatch();
                 s.Restart();
-                await Task.Run(() => _communicator.SendReceiveCommand(SendFileCommand.Instance, data));
+                proxy.SendFile(fileBytes);
                 s.Stop();
                 var str = $"{fileBytes.Length} bytes in {s.Elapsed.TotalMilliseconds} ms ({fileBytes.Length/ s.Elapsed.TotalSeconds :F2} bytes/s)";
                 _text.Text = str;

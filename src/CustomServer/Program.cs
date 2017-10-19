@@ -1,5 +1,7 @@
 ﻿using System;
+using System.Net;
 using Common.Protocol;
+using ServiceWire.TcpIp;
 
 namespace CustomServer
 {
@@ -7,28 +9,12 @@ namespace CustomServer
     {
         static void Main(string[] args)
         {
-            var comm = new Communicator("127.0.0.1");
-            comm.AppendReceiveSendHandler(GetFileListCommand.Instance, GetFileListHandler);
-            comm.AppendReceiveSendHandler(SendFileCommand.Instance, SendFileHandler);
+            var host = new TcpHost(new IPEndPoint(IPAddress.Parse("127.0.0.1"), 9211));
+            host.AddService<IFileService>(new FileService());
+            host.Open();
 
             while (Console.ReadKey().Key != ConsoleKey.Enter) ;
-            comm.Shutdown();
-        }
-
-        private static object SendFileHandler(SendFileCommandData arg)
-        {
-            Console.WriteLine($"Received {arg.Data.Length} bytes");
-            return "strr";
-        }
-
-        private static GetFileListResponse GetFileListHandler(GetFileListRequest arg)
-        {
-            Console.WriteLine($"Client requested {arg.RequestData}");
-
-            return new GetFileListResponse
-            {
-                Data = DateTime.Now.ToString("G"),
-            };
+            host.Dispose();
         }
     }
 }
