@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Net;
-using Common.Protocol;
+using FileSync.Common;
+using ServiceWire;
 using ServiceWire.TcpIp;
 
 namespace CustomServer
@@ -9,7 +10,9 @@ namespace CustomServer
     {
         static void Main(string[] args)
         {
-            var host = new TcpHost(new IPEndPoint(IPAddress.Parse("127.0.0.1"), 9211));
+            var logger = new Logger(logLevel:LogLevel.Debug);
+            var stats = new Stats();
+            var host = new TcpHost(new IPEndPoint(IPAddress.Parse("127.0.0.1"), 9211), logger, stats);
             host.AddService<IFileService>(new FileService());
             host.Open();
 

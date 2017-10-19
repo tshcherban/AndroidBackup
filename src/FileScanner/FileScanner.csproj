@@ -88,9 +88,9 @@
     <Folder Include="Resources\drawable\" />
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="..\ClassLibrary2\Common.csproj">
-      <Project>{095DEF5D-7048-4A5D-9A06-02F9854C25E2}</Project>
-      <Name>Common</Name>
+    <ProjectReference Include="..\FileSync.Common\FileSync.Common.csproj">
+      <Project>{F8CB007A-612B-404A-9D6B-808566504CC9}</Project>
+      <Name>FileSync.Common</Name>
     </ProjectReference>
   </ItemGroup>
   <Import Project="$(MSBuildExtensionsPath)\Xamarin\Android\Xamarin.Android.CSharp.targets" />

@@ -8,17 +8,41 @@ using System.Threading.Tasks;
 using Android.App;
 using Android.Widget;
 using Android.OS;
+using Android.Text.Method;
 using Android.Views;
-using Common.Protocol;
+using FileSync.Common;
 using ServiceWire.TcpIp;
+using Environment = System.Environment;
 
 namespace FileScanner
 {
     [Activity(Label = "FileScanner", MainLauncher = true)]
     public class MainActivity : Activity
     {
+        private readonly Lazy<IFileService> _serviceContainer;
+
         private TextView _text;
-        private IFileService proxy;
+        private IDisposable _client;
+
+        public MainActivity()
+        {
+            _serviceContainer = new Lazy<IFileService>(InitService);
+        }
+
+        private IFileService InitService()
+        {
+            var serverUrl = "10.0.2.2";
+            var client = new TcpClient<IFileService>(new IPEndPoint(IPAddress.Parse(serverUrl), 9211));
+            _client = client;
+            return client.Proxy;
+        }
+
+        protected override void OnDestroy()
+        {
+            _client?.Dispose();
+
+            base.OnDestroy();
+        }
 
         protected override void OnCreate(Bundle savedInstanceState)
         {
@@ -30,15 +54,11 @@ namespace FileScanner
             Window.AddFlags(WindowManagerFlags.KeepScreenOn);
 
             _text = FindViewById<TextView>(Resource.Id.editText1);
-            var btn = FindViewById<Button>(Resource.Id.button1);
-
             _text.TextAlignment = TextAlignment.Gravity;
-            //_text.Text = string.Join("\r\n", DriveInfo.GetDrives().Select(d => d.Name));
+            _text.MovementMethod = new ScrollingMovementMethod();
 
+            var btn = FindViewById<Button>(Resource.Id.button1);
             btn.Click += BtnOnClick;
-            var serverUrl = "10.0.2.2";
-            var client = new TcpClient<IFileService>(new IPEndPoint(IPAddress.Parse(serverUrl), 9211));
-            proxy = client.Proxy;
             
             return;
             using (var alg = SHA1.Create())
@@ -56,17 +76,33 @@ namespace FileScanner
         }
         private async void BtnOnClick(object sender, EventArgs e)
         {
+            /*var paths = string.Join("\r\n", Enum.GetValues(typeof(Environment.SpecialFolder))
+                .Cast<Environment.SpecialFolder>().Select(en =>
+                {
+                    try
+                    {
+                        return $"{en.ToString()}\r\n{Environment.GetFolderPath(en)}\r\n";
+                    }
+                    catch (Exception)
+                    {
+                        return null;
+                    }
+                })
+                .Where(i => i != null).ToList());
+            _text.Text = paths;
+
+            return;*/
+
             try
             {
                 var filePath = "/storage/sdcard/dcim/file1";
                 var fileBytes = File.ReadAllBytes(filePath);
 
                 
-                var list = proxy.GetFileList();
                 
                 var s = new Stopwatch();
                 s.Restart();
-                proxy.SendFile(fileBytes);
+                _serviceContainer.Value.SendFile(fileBytes);
                 s.Stop();
                 var str = $"{fileBytes.Length} bytes in {s.Elapsed.TotalMilliseconds} ms ({fileBytes.Length/ s.Elapsed.TotalSeconds :F2} bytes/s)";
                 _text.Text = str;

@@ -1,6 +1,6 @@
 ﻿using System;
 using System.Net;
-using Common.Protocol;
+using FileSync.Common;
 using ServiceWire.TcpIp;
 
 namespace CustomClient
