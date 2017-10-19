@@ -4,7 +4,6 @@ using System.IO;
 using System.Linq;
 using System.Net;
 using System.Security.Cryptography;
-using System.Threading.Tasks;
 using Android.App;
 using Android.Widget;
 using Android.OS;
@@ -12,9 +11,8 @@ using Android.Text.Method;
 using Android.Views;
 using FileSync.Common;
 using ServiceWire.TcpIp;
-using Environment = System.Environment;
 
-namespace FileScanner
+namespace FileSync.Android
 {
     [Activity(Label = "FileScanner", MainLauncher = true)]
     public class MainActivity : Activity

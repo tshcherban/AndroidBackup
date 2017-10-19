@@ -5,11 +5,11 @@ VisualStudioVersion = 15.0.27004.2002
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "FileSync.Common", "FileSync.Common\FileSync.Common.csproj", "{F8CB007A-612B-404A-9D6B-808566504CC9}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "FileScanner", "FileScanner\FileScanner.csproj", "{62E659A2-4CF2-43E0-BEF3-9385B85AE03A}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "FileSync.Android", "FileScanner\FileSync.Android.csproj", "{62E659A2-4CF2-43E0-BEF3-9385B85AE03A}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CustomServer", "CustomServer\CustomServer.csproj", "{E7B8E7B6-0EF6-4363-B786-24DDC6E6ABC5}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "FileSync.Server", "CustomServer\FileSync.Server.csproj", "{E7B8E7B6-0EF6-4363-B786-24DDC6E6ABC5}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CustomClient", "CustomClient\CustomClient.csproj", "{B877716D-3754-4B1D-9F16-E828975BFF9B}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "FileSync.TestClient", "CustomClient\FileSync.TestClient.csproj", "{B877716D-3754-4B1D-9F16-E828975BFF9B}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution

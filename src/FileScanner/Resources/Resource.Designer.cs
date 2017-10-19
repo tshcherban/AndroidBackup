@@ -9,9 +9,9 @@
 // </auto-generated>
 //------------------------------------------------------------------------------
 
-[assembly: global::Android.Runtime.ResourceDesignerAttribute("FileScanner.Resource", IsApplication=true)]
+[assembly: global::Android.Runtime.ResourceDesignerAttribute("FileSync.Android.Resource", IsApplication=true)]
 
-namespace FileScanner
+namespace FileSync.Android
 {
 	
 	
