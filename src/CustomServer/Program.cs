@@ -13,7 +13,7 @@ namespace CustomServer
             var logger = new Logger(logLevel:LogLevel.Debug);
             var stats = new Stats();
             var host = new TcpHost(new IPEndPoint(IPAddress.Parse("127.0.0.1"), 9211), logger, stats);
-            host.AddService<IFileService>(new FileService());
+            host.AddService<ISyncFileService>(new SyncSyncFileService());
             host.Open();
 
             while (Console.ReadKey().Key != ConsoleKey.Enter) ;
