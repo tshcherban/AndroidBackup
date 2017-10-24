@@ -9,6 +9,8 @@ namespace FileSync.Common
 
         public DateTime LastAccessTime { get; set; }
 
+        public DateTime CreateTime { get; set; }
+
         public bool Expired => (DateTime.Now - LastAccessTime).TotalMinutes > SessionStorage.SessionTimeoutMinutes;
 
         public string BaseDir { get; set; }
@@ -18,5 +20,9 @@ namespace FileSync.Common
         public List<(string, string)> FilesForDeletion { get; } = new List<(string, string)>();
 
         public List<(string, string)> FilesForRename { get; } = new List<(string, string)>();
+
+        public List<string> FoldersToRemove { get; } = new List<string>();
+
+        public List<string> FoldersToAdd { get; } = new List<string>();
     }
 }

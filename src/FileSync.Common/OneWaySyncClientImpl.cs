@@ -57,6 +57,11 @@ namespace FileSync.Common
                     proxy.SendFile(sessionId, i.RelativePath, i.Hash, file);
                 }
 
+                var folders = Directory.GetDirectories(_baseDir, "*", SearchOption.AllDirectories)
+                    .Select(f => f.Replace(_baseDir, string.Empty))
+                    .ToList();
+                proxy.SyncDirectories(sessionId, folders);
+
                 proxy.CompleteSession(sessionId);
             }
         }

@@ -31,7 +31,8 @@ namespace FileSync.Common
                     Task.Delay(sleepSpan).Wait();
                 }
 
-                var session = new Session {Id = Guid.NewGuid(), LastAccessTime = DateTime.Now};
+                var time = DateTime.Now;
+                var session = new Session {Id = Guid.NewGuid(), LastAccessTime = time, CreateTime = time};
                 _sessions.Add(session);
                 _lastSessionCreated = DateTime.Now;
                 return session;
