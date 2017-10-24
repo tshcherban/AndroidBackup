@@ -10,24 +10,31 @@ namespace FileSync.Common
     {
         Guid GetSession();
 
-        SyncInfo GetSyncList(List<SyncFileInfo> files);
+        SyncInfo GetSyncList(Guid sessionId, List<SyncFileInfo> files);
 
-        void SendFile(string relativePath, byte[] hash, byte[] file);
+        void SendFile(Guid sessionId, string relativePath, byte[] hash, byte[] file);
+
+        void CompleteSession(Guid sessionId);
     }
 
 
-    public sealed class SyncSyncFileService : ISyncFileService
+    public sealed class SyncFileService : ISyncFileService
     {
-        const string baseDir = @"G:\SyncTest\Dst";
-
         public Guid GetSession()
         {
-            return SessionStorage.Instance.GetNewSession();
+            var session = SessionStorage.Instance.GetNewSession();
+            session.BaseDir = @"G:\SyncTest\Dst"; // TODO get from config/client/etc
+            session.ServiceDir = Path.Combine(session.BaseDir, ".sync");
+            return session.Id;
         }
 
-        public SyncInfo GetSyncList(List<SyncFileInfo> remoteInfos)
+        public SyncInfo GetSyncList(Guid sessionId, List<SyncFileInfo> remoteInfos)
         {
-            var localFiles = Directory.GetFiles(baseDir, "*", SearchOption.AllDirectories);
+            var session = SessionStorage.Instance.GetSession(sessionId);
+            if (session?.Expired ?? true)
+                throw new InvalidOperationException();
+
+            var localFiles = Directory.GetFiles(session.BaseDir, "*", SearchOption.AllDirectories);
             var localInfos = localFiles.Select(i =>
             {
                 using (HashAlgorithm alg = SHA1.Create())
@@ -38,7 +45,7 @@ namespace FileSync.Common
                     return new SyncFileInfo
                     {
                         Hash = alg.Hash,
-                        RelativePath = i.Replace(baseDir, string.Empty),
+                        RelativePath = i.Replace(session.BaseDir, string.Empty),
                         AbsolutePath = i,
                     };
                 }
@@ -46,7 +53,7 @@ namespace FileSync.Common
 
             var ret = new SyncInfo();
 
-            var toRemove = new List<SyncFileInfo>();
+            var filesToRemove = new List<SyncFileInfo>();
 
             foreach (var remoteInfo in remoteInfos)
             {
@@ -62,38 +69,66 @@ namespace FileSync.Common
                 if (localInfo.RelativePath != remoteInfo.RelativePath)
                 {
                     ret.ToUpload.Add(remoteInfo);
-                    toRemove.Add(localInfo);
+                    filesToRemove.Add(localInfo);
                     continue; // TODO remove when move detection done
                 }
             }
 
             if (localInfos.Count > 0)
-                toRemove.AddRange(localInfos);
+                filesToRemove.AddRange(localInfos);
 
             var cnt = 1;
-            if (toRemove.Count > 0)
+            if (filesToRemove.Count > 0)
             {
-                var combine = Path.Combine(baseDir, ".sync");
-                if (!Directory.Exists(combine))
-                    Directory.CreateDirectory(combine);
+                if (!Directory.Exists(session.ServiceDir))
+                    Directory.CreateDirectory(session.ServiceDir);
 
-                foreach (var rem in toRemove)
+                foreach (var fileToRemove in filesToRemove)
                 {
-                    var destFileName = Path.Combine(baseDir, ".sync\\", cnt++.ToString());
+                    var destFileName = Path.Combine(session.ServiceDir, cnt++.ToString());
                     while (File.Exists(destFileName))
-                        destFileName = Path.Combine(baseDir, ".sync\\", cnt++.ToString());
+                        destFileName = Path.Combine(session.ServiceDir, cnt++.ToString());
 
-                    File.Move(rem.AbsolutePath, destFileName);
+                    File.Move(fileToRemove.AbsolutePath, destFileName);
+                    session.FilesForDeletion.Add((destFileName, fileToRemove.AbsolutePath));
                 }
             }
 
             return ret;
         }
 
-        public void SendFile(string relativePath, byte[] hash, byte[] file)
+        public void SendFile(Guid sessionId, string relativePath, byte[] hash, byte[] file)
         {
-            var path = baseDir + relativePath;
-            File.WriteAllBytes(path, file);
+            var session = SessionStorage.Instance.GetSession(sessionId);
+            if (session?.Expired ?? true)
+                throw new InvalidOperationException();
+
+            var path = session.BaseDir + relativePath;
+            var directory = Path.GetDirectoryName(path);
+            if (!Directory.Exists(directory))
+                Directory.CreateDirectory(directory);
+
+            var newFile = path + ".new";
+            File.WriteAllBytes(newFile, file);
+            session.FilesForRename.Add((newFile, path));
+        }
+
+        public void CompleteSession(Guid sessionId)
+        {
+            var session = SessionStorage.Instance.GetSession(sessionId);
+            if (session.Expired)
+                throw new InvalidOperationException("Session expired");
+
+            foreach (var i in session.FilesForDeletion)
+                File.Delete(i.Item1);
+
+            foreach (var i in session.FilesForRename)
+                File.Move(i.Item1, i.Item2);
+
+            if (Directory.Exists(session.ServiceDir))
+                Directory.Delete(session.ServiceDir);
+
+            SessionStorage.Instance.CloseSession(session);
         }
     }
 }

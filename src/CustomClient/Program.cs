@@ -26,14 +26,31 @@ namespace FileSync.TestClient
                     return new SyncFileInfo { Hash = alg.Hash, RelativePath = i.Replace(baseDir, string.Empty) };
                 }).ToList();
 
-                var syncList = proxy.GetSyncList(localInfos);
+                var sessionId = proxy.GetSession();
+
+                Console.WriteLine($"Got session {sessionId}");
+                Console.ReadKey();
+
+                var syncList = proxy.GetSyncList(sessionId, localInfos);
+
+                Console.WriteLine($"Got sync list. {syncList.ToUpload} to upload");
+                Console.ReadKey();
 
                 foreach (var i in syncList.ToUpload)
                 {
                     var f = baseDir + i.RelativePath;
                     var file = File.ReadAllBytes(f);
-                    proxy.SendFile(i.RelativePath, i.Hash, file);
+                    proxy.SendFile(sessionId, i.RelativePath, i.Hash, file);
+
+                    Console.WriteLine($"{i.RelativePath} sent");
                 }
+
+                Console.WriteLine($"About to complete session");
+                Console.ReadKey();
+
+                proxy.CompleteSession(sessionId);
+
+                Console.WriteLine($"Session completed");
 
                 Console.ReadKey();
             }
