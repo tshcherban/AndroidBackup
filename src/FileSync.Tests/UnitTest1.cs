@@ -29,6 +29,8 @@ namespace FileSync.Tests
 
                 sw.Stop();
 
+                Assert.AreEqual(ids.Count, num, $"Got {ids.Count} sessions, but expected {num}");
+
                 Assert.IsTrue(sw.Elapsed.TotalSeconds <= expectedTimeMax && sw.Elapsed.TotalSeconds >= expectedTimeMin,
                     $"Got {num} sessions in {sw.Elapsed.TotalSeconds} s, but expected in {expectedTimeMin} - {expectedTimeMax} s");
             }
