@@ -34,7 +34,8 @@ namespace FileSync.Common
         {
             try
             {
-                using (var client = new TcpClient<ITwoWaySyncService>(new IPEndPoint(IPAddress.Parse(_serverAddress), _serverPort)))
+                using (var client =
+                    new TcpClient<ITwoWaySyncService>(new IPEndPoint(IPAddress.Parse(_serverAddress), _serverPort)))
                 {
                     _serverProxy = client.Proxy;
 
@@ -71,6 +72,14 @@ namespace FileSync.Common
 
                     if (!SendFiles(syncList.Data.ToUpload))
                         return;
+
+                    var response = _serverProxy.FinishSession(_sessionId);
+                    if (response.HasError)
+                    {
+                        Log?.Invoke($"Error finishing session. Server response was '{response.ErrorMsg}'");
+                    }
+
+                    syncDb.Store(_syncDbDir);
                 }
             }
             catch (Exception e)
@@ -83,14 +92,13 @@ namespace FileSync.Common
         {
             foreach (var f in dataToUpload)
             {
-                var transferId = _serverProxy.StartSendToServer(_sessionId, f.RelativePath, f.HashStr, new FileInfo($"{_baseDir}{f.RelativePath}").Length);
+                var transferId = _serverProxy.StartSendToServer(_sessionId, f.RelativePath, f.HashStr,
+                    new FileInfo($"{_baseDir}{f.RelativePath}").Length);
                 if (transferId.HasError)
                 {
                     Log?.Invoke($"Unable to start file receive. Server response was '{transferId.ErrorMsg}'");
                     return false;
                 }
-
-                Trace.WriteLine($"Got filetransfer session {transferId.Data.Id}");
 
                 const int chunkLength = 16 * 1024 * 1024;
 
@@ -99,9 +107,9 @@ namespace FileSync.Common
                 using (var networkStream = tcpClient.GetStream())
                 {
                     var buff = _sessionId.ToByteArray();
-                     networkStream.Write(buff, 0, buff.Length);
+                    networkStream.Write(buff, 0, buff.Length);
                     buff = transferId.Data.Id.ToByteArray();
-                     networkStream.Write(buff, 0, buff.Length);
+                    networkStream.Write(buff, 0, buff.Length);
 
                     using (var fStream = File.OpenRead($"{_baseDir}{f.RelativePath}"))
                     {
@@ -109,17 +117,17 @@ namespace FileSync.Common
                         var buffer = new byte[Math.Min(bytesLeft, chunkLength)];
                         do
                         {
-                            var readSize = (int)Math.Min(chunkLength, bytesLeft);
-                            var read =  fStream.Read(buffer, 0, readSize);
+                            var readSize = (int) Math.Min(chunkLength, bytesLeft);
+                            var read = fStream.Read(buffer, 0, readSize);
                             networkStream.Write(buffer, 0, readSize);
                             networkStream.Flush();
                             bytesLeft -= read;
                         } while (bytesLeft > 0);
 
-                         networkStream.Flush();
+                        networkStream.Flush();
                     }
                 }
-               
+
 
                 var finishResponse = _serverProxy.EndSendToServer(_sessionId, transferId.Data.Id);
                 if (finishResponse.HasError)
@@ -146,7 +154,7 @@ namespace FileSync.Common
                     Log?.Invoke($"Unable to start file receive. Server response was '{transferId.ErrorMsg}'");
                     return false;
                 }
-                
+
                 var tcpClient = new System.Net.Sockets.TcpClient();
                 tcpClient.Connect(new IPEndPoint(IPAddress.Parse("127.0.0.1"), 9212));
                 using (var stream = tcpClient.GetStream())
@@ -164,10 +172,10 @@ namespace FileSync.Common
                     {
                         do
                         {
-                            var readSize = (int)Math.Min(chunkLength, bytesLeft);
-                            var read =  stream.Read(buffer, 0, readSize);
+                            var readSize = (int) Math.Min(chunkLength, bytesLeft);
+                            var read = stream.Read(buffer, 0, readSize);
                             bytesLeft -= read;
-                             fStream.Write(buffer, 0, readSize);
+                            fStream.Write(buffer, 0, readSize);
                         } while (bytesLeft > 0);
                     }
                 }
@@ -189,7 +197,7 @@ namespace FileSync.Common
             var syncDb = SyncDatabase.Get(_baseDir, _syncDbDir);
             if (syncDb == null)
             {
-                syncDb = SyncDatabase.Initialize(_baseDir);
+                syncDb = SyncDatabase.Initialize(_baseDir, _syncDbDir);
                 if (syncDb != null)
                     return syncDb;
 
@@ -209,7 +217,7 @@ namespace FileSync.Common
 
             foreach (var stored in syncDb.Files)
             {
-                var localFileIdx = localFiles.IndexOf(stored.RelativePath);
+                var localFileIdx = localFiles.IndexOf($"{_baseDir}{stored.RelativePath}");
                 if (localFileIdx < 0)
                 {
                     stored.State = SyncFileState.Deleted;

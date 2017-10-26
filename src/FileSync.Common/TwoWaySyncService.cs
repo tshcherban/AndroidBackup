@@ -28,7 +28,7 @@ namespace FileSync.Common
 
         ServerResponse SyncDirectories(Guid sessionId, List<string> remoteFolders);
 
-        ServerResponse CompleteSession(Guid sessionId);
+        ServerResponse FinishSession(Guid sessionId);
     }
 
     public sealed class TwoWaySyncService : ITwoWaySyncService
@@ -145,13 +145,13 @@ namespace FileSync.Common
             return ret;
         }
 
-        private SyncDatabase GetSyncDb(string baseDir, string syncDbDir, out string error)
+       private SyncDatabase GetSyncDb(string baseDir, string syncDbDir, out string error)
         {
             error = null;
             var syncDb = SyncDatabase.Get(baseDir, syncDbDir);
             if (syncDb == null)
             {
-                syncDb = SyncDatabase.Initialize(baseDir);
+                syncDb = SyncDatabase.Initialize(baseDir, syncDbDir);
                 if (syncDb != null)
                     return syncDb;
 
@@ -171,7 +171,7 @@ namespace FileSync.Common
 
             foreach (var stored in syncDb.Files)
             {
-                var localFileIdx = localFiles.IndexOf(stored.RelativePath);
+                var localFileIdx = localFiles.IndexOf($"{baseDir}{stored.RelativePath}");
                 if (localFileIdx < 0)
                 {
                     stored.State = SyncFileState.Deleted;
@@ -437,9 +437,29 @@ namespace FileSync.Common
             throw new NotImplementedException();
         }
 
-        public ServerResponse CompleteSession(Guid sessionId)
+        public ServerResponse FinishSession(Guid sessionId)
         {
-            throw new NotImplementedException();
+            var ret = new ServerResponse();
+
+            var session = SessionStorage.Instance.GetSession(sessionId);
+            if (session?.Expired ?? true)
+            {
+                ret.ErrorMsg = "Session has expired";
+                Log?.Invoke("Session has expired");
+                return ret;
+            }
+
+            if (session.FileTransferSession != null)
+            {
+                ret.ErrorMsg = "A file transfer session is not completed";
+            }
+            else
+            {
+                session.SyncDb = SyncDatabase.Initialize(session.BaseDir, session.ServiceDir);
+                session.SyncDb.Store(session.ServiceDir);
+            }
+
+            return ret;
         }
     }
 }

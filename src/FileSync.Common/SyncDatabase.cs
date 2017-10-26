@@ -35,11 +35,14 @@ namespace FileSync.Common
             }
         }
 
-        public static SyncDatabase Initialize(string baseDir)
+        public static SyncDatabase Initialize(string baseDir, string syncDbDir)
         {
             var localFiles = Directory.GetFiles(baseDir, "*", SearchOption.AllDirectories);
+            var inside = syncDbDir.StartsWith(baseDir);
             var localInfos = localFiles.Select(i =>
             {
+                if (inside && i.StartsWith(syncDbDir))
+                    return null;
                 HashAlgorithm alg = SHA1.Create();
                 alg.ComputeHash(File.OpenRead(i));
                 return new SyncFileInfo
@@ -49,7 +52,7 @@ namespace FileSync.Common
                     AbsolutePath = i,
                     State = SyncFileState.New,
                 };
-            }).ToList();
+            }).Where(i => i != null).ToList();
 
             return new SyncDatabase
             {
