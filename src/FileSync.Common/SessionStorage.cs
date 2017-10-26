@@ -8,7 +8,7 @@ namespace FileSync.Common
     public class SessionStorage
     {
         public const int CreateSessionTimeoutSeconds = 3;
-        public const int SessionTimeoutMinutes = 2;
+        public const int SessionTimeoutMinutes = 10;
 
         public static readonly SessionStorage Instance = new SessionStorage();
         
@@ -32,7 +32,12 @@ namespace FileSync.Common
                 }
 
                 var time = DateTime.Now;
-                var session = new Session {Id = Guid.NewGuid(), LastAccessTime = time, CreateTime = time};
+                var session = new Session
+                {
+                    Id = Guid.NewGuid(),
+                    LastAccessTime = time,
+                    CreateTime = time,
+                };
                 _sessions.Add(session);
                 _lastSessionCreated = DateTime.Now;
                 return session;

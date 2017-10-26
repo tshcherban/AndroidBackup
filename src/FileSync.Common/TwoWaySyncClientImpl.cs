@@ -5,6 +5,7 @@ using System.IO;
 using System.Linq;
 using System.Net;
 using System.Security.Cryptography;
+using System.Threading.Tasks;
 using ServiceWire.TcpIp;
 
 namespace FileSync.Common
@@ -28,8 +29,6 @@ namespace FileSync.Common
             _baseDir = baseDir;
             _syncDbDir = syncDbDir;
         }
-
-        
 
         public void Sync()
         {
@@ -84,36 +83,53 @@ namespace FileSync.Common
         {
             foreach (var f in dataToUpload)
             {
-                var transferId = _serverProxy.StartFileSend(_sessionId, f.RelativePath, f.HashStr);
+                var transferId = _serverProxy.StartSendToServer(_sessionId, f.RelativePath, f.HashStr, new FileInfo($"{_baseDir}{f.RelativePath}").Length);
                 if (transferId.HasError)
                 {
                     Log?.Invoke($"Unable to start file receive. Server response was '{transferId.ErrorMsg}'");
                     return false;
                 }
 
-                const int length = 16 * 1024 * 1024;
-                
-                using (var fStream = File.OpenRead($"{_baseDir}{f.RelativePath}"))
+                Trace.WriteLine($"Got filetransfer session {transferId.Data.Id}");
+
+                const int chunkLength = 16 * 1024 * 1024;
+
+                var tcpClient = new System.Net.Sockets.TcpClient();
+                tcpClient.Connect(new IPEndPoint(IPAddress.Parse("127.0.0.1"), 9212));
+                using (var networkStream = tcpClient.GetStream())
                 {
-                    var toRead = fStream.Length;
+                    var buff = _sessionId.ToByteArray();
+                     networkStream.Write(buff, 0, buff.Length);
+                    buff = transferId.Data.Id.ToByteArray();
+                     networkStream.Write(buff, 0, buff.Length);
 
-                    do
+                    using (var fStream = File.OpenRead($"{_baseDir}{f.RelativePath}"))
                     {
-                        var toReadSize = (int) Math.Min(length, toRead);
+                        var bytesLeft = fStream.Length;
+                        var buffer = new byte[Math.Min(bytesLeft, chunkLength)];
+                        do
+                        {
+                            var readSize = (int)Math.Min(chunkLength, bytesLeft);
+                            var read =  fStream.Read(buffer, 0, readSize);
+                            networkStream.Write(buffer, 0, readSize);
+                            networkStream.Flush();
+                            bytesLeft -= read;
+                        } while (bytesLeft > 0);
 
-                        var buffer = new byte[toReadSize];
-                        var read = fStream.Read(buffer, 0, toReadSize);
-                        toRead -= read;
-
-                        _serverProxy.SendChunk(_sessionId, transferId.Data, "" /*TODO*/, buffer);
-                    } while (toRead > 0);
+                         networkStream.Flush();
+                    }
                 }
+               
 
-                var finishResponse = _serverProxy.FinishFileSend(_sessionId, transferId.Data);
+                var finishResponse = _serverProxy.EndSendToServer(_sessionId, transferId.Data.Id);
                 if (finishResponse.HasError)
                 {
-                    Log?.Invoke($"Unable to finish file receive. Server response was '{transferId.ErrorMsg}'");
+                    Log?.Invoke($"Unable to finish file send. Server response was '{transferId.ErrorMsg}'");
                     return false;
+                }
+                if (finishResponse.Data.Errors.Count > 0)
+                {
+                    Log?.Invoke("");
                 }
             }
 
@@ -124,24 +140,40 @@ namespace FileSync.Common
         {
             foreach (var f in syncList.Data.ToDownload)
             {
-                var transferId = _serverProxy.StartFileReceive(_sessionId, f.RelativePath);
+                var transferId = _serverProxy.StartSendToClient(_sessionId, f.RelativePath);
                 if (transferId.HasError)
                 {
                     Log?.Invoke($"Unable to start file receive. Server response was '{transferId.ErrorMsg}'");
                     return false;
                 }
-
-                using (var fStream = File.Create($"{_baseDir}{f.RelativePath}._sync"))
+                
+                var tcpClient = new System.Net.Sockets.TcpClient();
+                tcpClient.Connect(new IPEndPoint(IPAddress.Parse("127.0.0.1"), 9212));
+                using (var stream = tcpClient.GetStream())
                 {
-                    ServerResponseWithData<FileChunk> chunk;
-                    do
-                    {
-                        chunk = _serverProxy.ReceiveChunk(_sessionId, transferId.Data.Id);
-                        fStream.Write(chunk.Data.Data, 0, chunk.Data.Data.Length);
-                    } while (chunk.Data.IsLast);
-                }
+                    var buffer = new byte[16];
+                    stream.Write(_sessionId.ToByteArray(), 0, 16);
+                    stream.Write(transferId.Data.Id.ToByteArray(), 0, 16);
 
-                var resp = _serverProxy.FinishFileReceive(_sessionId, transferId.Data.Id);
+                    const int chunkLength = 16 * 1024 * 1024;
+
+                    var bytesLeft = transferId.Data.FileLength;
+                    buffer = new byte[Math.Min(bytesLeft, chunkLength)];
+
+                    using (var fStream = File.Create($"{_baseDir}{transferId.Data.RelativePath}._sync"))
+                    {
+                        do
+                        {
+                            var readSize = (int)Math.Min(chunkLength, bytesLeft);
+                            var read =  stream.Read(buffer, 0, readSize);
+                            bytesLeft -= read;
+                             fStream.Write(buffer, 0, readSize);
+                        } while (bytesLeft > 0);
+                    }
+                }
+                tcpClient.Dispose();
+
+                var resp = _serverProxy.EndSendToClient(_sessionId, transferId.Data.Id);
                 if (resp.HasError)
                 {
                     Log?.Invoke($"Unable to complete file receive. Server response was '{resp.ErrorMsg}'");

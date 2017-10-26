@@ -63,7 +63,7 @@ namespace FileSync.Android
             var cn = StopService(i);
         }
 
-        private async void BtnOnClick(object sender, EventArgs e)
+        private void BtnOnClick(object sender, EventArgs e)
         {
             var i = new Intent(this, typeof(DemoService));
             i.PutExtra("data", DateTime.Now.ToString("G"));

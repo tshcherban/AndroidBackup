@@ -3,8 +3,12 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Net.Sockets;
 using System.Security.Cryptography;
 using System.Text;
+using System.Threading;
+using System.Threading.Tasks;
+using Newtonsoft.Json;
 
 namespace FileSync.Common
 {
@@ -24,6 +28,10 @@ namespace FileSync.Common
         public string RelativePath { get; set; }
 
         public string Hash { get; set; }
+
+        public long FileLength { get; set; }
+
+        public List<string> Errors { get; set; } = new List<string>();
     }
 
     public interface ITwoWaySyncService
@@ -33,17 +41,13 @@ namespace FileSync.Common
         ServerResponseWithData<SyncInfo> GetSyncList(Guid sessionId, List<SyncFileInfo> files);
 
 
-        ServerResponseWithData<Guid> StartFileSend(Guid sessionId, string relativePath, string fileHash);
+        ServerResponseWithData<FileDTO> StartSendToServer(Guid sessionId, string relativePath, string fileHash, long fileLength);
 
-        ServerResponse SendChunk(Guid sessionId, Guid fileId, string chunkHash, byte[] chunk);
+        ServerResponseWithData<FileDTO> EndSendToServer(Guid sessionId, Guid fileId);
 
-        ServerResponse FinishFileSend(Guid sessionId, Guid fileId);
+        ServerResponseWithData<FileDTO> StartSendToClient(Guid sessionId, string relativePath);
 
-        ServerResponseWithData<FileDTO> StartFileReceive(Guid sessionId, string relativePath);
-
-        ServerResponseWithData<FileChunk> ReceiveChunk(Guid sessionId, Guid fileId);
-
-        ServerResponse FinishFileReceive(Guid sessionId, Guid fileId);
+        ServerResponse EndSendToClient(Guid sessionId, Guid fileId);
 
 
         ServerResponse SyncDirectories(Guid sessionId, List<string> remoteFolders);
@@ -53,6 +57,13 @@ namespace FileSync.Common
 
     public sealed class TwoWaySyncService : ITwoWaySyncService
     {
+        private readonly TcpListener _tcpListener;
+
+        public TwoWaySyncService(TcpListener tcpListener)
+        {
+            _tcpListener = tcpListener;
+        }
+
         public event Action<string> Log;
         public ServerResponseWithData<Guid> GetSession()
         {
@@ -177,7 +188,7 @@ namespace FileSync.Common
             return syncDb;
         }
 
-        private void CheckState(string baseDir, string syncDbDir, SyncDatabase syncDb)
+        private static void CheckState(string baseDir, string syncDbDir, SyncDatabase syncDb)
         {
             var localFiles = Directory.GetFiles(baseDir, "*", SearchOption.AllDirectories).ToList();
             var dbDirInBase = syncDbDir.StartsWith(baseDir);
@@ -226,22 +237,117 @@ namespace FileSync.Common
             syncDb.Files.AddRange(localInfos);
         }
 
-        public ServerResponseWithData<Guid> StartFileSend(Guid sessionId, string relativePath, string fileHash)
+        public ServerResponseWithData<FileDTO> StartSendToServer(Guid sessionId, string relativePath, string fileHash, long fileLength)
         {
-            throw new NotImplementedException();
+            var ret = new ServerResponseWithData<FileDTO>();
+
+            var session = SessionStorage.Instance.GetSession(sessionId);
+            if (session?.Expired ?? true)
+            {
+                ret.ErrorMsg = "Session has expired";
+                Log?.Invoke("Session has expired");
+                return ret;
+            }
+
+            if (session.FileTransferSession != null)
+                throw null;
+
+            ret.Data = new FileDTO
+            {
+                Id = Guid.NewGuid(),
+                RelativePath = relativePath,
+                FileLength = fileLength,
+            };
+
+            session.FileTransferSession = ret.Data;
+
+            session.SendTask = _tcpListener.AcceptTcpClientAsync().ContinueWith(ProcessSendToServer);
+            return ret;
         }
 
-        public ServerResponse SendChunk(Guid sessionId, Guid fileId, string chunkHash, byte[] chunk)
+        private void ProcessSendToServer(Task<TcpClient> task)
         {
-            throw new NotImplementedException();
+            var tcpClient = task.Result;
+
+            using (var stream = tcpClient.GetStream())
+            {
+                var buffer = new byte[16];
+                var read =  stream.Read(buffer, 0, 16);
+                var sessionId = new Guid(buffer);
+                read =  stream.Read(buffer, 0, 16);
+                var fileId = new Guid(buffer);
+
+                var session = SessionStorage.Instance.GetSession(sessionId);
+                if (session == null)
+                {
+                    Log?.Invoke($"Session {sessionId} does not exist");
+                    return;
+                }
+                if (session.Expired)
+                {
+                    Log?.Invoke("Session has expired");
+                    return;
+                }
+
+                var fileTransferSession = session.FileTransferSession;
+                if (fileTransferSession == null)
+                {
+                    Log?.Invoke("File transfer session null");
+                    return;
+                }
+                if (fileTransferSession.Id != fileId)
+                {
+                    Log?.Invoke("File id incorrect");
+                    fileTransferSession.Errors.Add("File id incorrect");
+                    return;
+                }
+
+                const int chunkLength = 16 * 1024 * 1024;
+
+                var bytesLeft = fileTransferSession.FileLength;
+                buffer = new byte[Math.Min(bytesLeft, chunkLength)];
+
+                var formattableString = $"{session.BaseDir}{fileTransferSession.RelativePath}._sync";
+                var dir = Path.GetDirectoryName(formattableString);
+                if (!Directory.Exists(dir))
+                    Directory.CreateDirectory(dir);
+
+                using (var fStream = File.Create(formattableString))
+                {
+                    do
+                    {
+                        var readSize = (int)Math.Min(chunkLength, bytesLeft);
+                        read =  stream.Read(buffer, 0, readSize);
+                         fStream.Write(buffer, 0, readSize);
+                         fStream.Flush();
+                        bytesLeft -= read;
+                    } while (bytesLeft > 0);
+                    
+                }
+            }
+            tcpClient.Dispose();
         }
 
-        public ServerResponse FinishFileSend(Guid sessionId, Guid fileId)
+        public ServerResponseWithData<FileDTO> EndSendToServer(Guid sessionId, Guid fileId)
         {
-            throw new NotImplementedException();
+            var ret = new ServerResponseWithData<FileDTO>();
+
+            var session = SessionStorage.Instance.GetSession(sessionId);
+            if (session?.Expired ?? true)
+            {
+                ret.ErrorMsg = "Session has expired";
+                Log?.Invoke("Session has expired");
+                return ret;
+            }
+
+            session.SendTask.Wait();
+            ret.Data = session.FileTransferSession;
+            session.FileTransferSession = null;
+
+            return ret;
         }
 
-        public ServerResponseWithData<FileDTO> StartFileReceive(Guid sessionId, string relativePath)
+        public ServerResponseWithData<FileDTO> StartSendToClient(Guid sessionId, string relativePath)
         {
             var ret = new ServerResponseWithData<FileDTO>();
             
@@ -253,24 +359,91 @@ namespace FileSync.Common
                 return ret;
             }
 
-            session.FileTransferSession = Guid.NewGuid();
-
             ret.Data = new FileDTO
             {
-                Id = session.FileTransferSession.Value,
+                Id = Guid.NewGuid(),
+                RelativePath = relativePath,
+                FileLength = new FileInfo($"{session.BaseDir}{relativePath}").Length,
             };
+
+            session.FileTransferSession = ret.Data;
+
+            session.SendTask = Task.Run(() =>
+            {
+                var client = _tcpListener.AcceptTcpClient();
+                ProcessSendToClient(Task.FromResult(client));
+            });
 
             return ret;
         }
 
-        public ServerResponseWithData<FileChunk> ReceiveChunk(Guid sessionId, Guid fileId)
+        private void ProcessSendToClient(Task<TcpClient> task)
         {
-            throw new NotImplementedException();
+            var tcpClient = task.Result;
+
+            using (var stream = tcpClient.GetStream())
+            {
+                var buffer = new byte[16];
+                var read =  stream.Read(buffer, 0, 16);
+                var sessionId = new Guid(buffer);
+                read =  stream.Read(buffer, 0, 16);
+                var fileId = new Guid(buffer);
+
+                var session = SessionStorage.Instance.GetSession(sessionId);
+                if (session?.Expired ?? true)
+                {
+                    Log?.Invoke("Session has expired");
+                    return;
+                }
+
+                var fileTransferSession = session.FileTransferSession;
+                if (fileTransferSession == null)
+                {
+                    Log?.Invoke("File transfer session null");
+                    return;
+                }
+                if (fileTransferSession.Id != fileId)
+                {
+                    Log?.Invoke("File id incorrect");
+                    return;
+                }
+
+                const int chunkLength = 16*1024*1024;
+
+                var bytesLeft = fileTransferSession.FileLength;
+                buffer = new byte[Math.Min(bytesLeft, chunkLength)];
+
+                using (var fStream = File.OpenRead($"{session.BaseDir}{fileTransferSession.RelativePath}"))
+                {
+                    do
+                    {
+                        var readSize = (int)Math.Min(chunkLength, bytesLeft);
+                        read =  fStream.Read(buffer, 0, readSize);
+                        stream.Write(buffer, 0, readSize);
+
+                        bytesLeft -= read;
+                    } while (bytesLeft > 0);
+                }
+            }
+            tcpClient.Dispose();
         }
 
-        public ServerResponse FinishFileReceive(Guid sessionId, Guid fileId)
+        public ServerResponse EndSendToClient(Guid sessionId, Guid fileId)
         {
-            throw new NotImplementedException();
+            var ret = new ServerResponse();
+
+            var session = SessionStorage.Instance.GetSession(sessionId);
+            if (session?.Expired ?? true)
+            {
+                ret.ErrorMsg = "Session has expired";
+                Log?.Invoke("Session has expired");
+                return ret;
+            }
+
+            //session.FileTransferSession.Processing.WaitOne();
+            session.FileTransferSession = null;
+
+            return ret;
         }
 
         public ServerResponse SyncDirectories(Guid sessionId, List<string> remoteFolders)

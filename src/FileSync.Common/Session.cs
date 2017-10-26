@@ -1,5 +1,8 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics;
+using System.Threading.Tasks;
+using Newtonsoft.Json;
 
 namespace FileSync.Common
 {
@@ -25,8 +28,10 @@ namespace FileSync.Common
 
         public List<string> FoldersToAdd { get; } = new List<string>();
 
-        public Guid? FileTransferSession { get; set; }
+        public FileDTO FileTransferSession { get; set; }
 
         public SyncDatabase SyncDb { get; set; }
+
+        public Task SendTask { get; set; }
     }
 }
