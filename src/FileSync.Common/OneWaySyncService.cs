@@ -6,13 +6,13 @@ using System.Security.Cryptography;
 
 namespace FileSync.Common
 {
-    public interface ISyncFileService
+    public interface IOneWaySyncService
     {
         Guid GetSession();
 
         SyncInfo GetSyncList(Guid sessionId, List<SyncFileInfo> files);
 
-        void SendFile(Guid sessionId, string relativePath, byte[] hash, byte[] file);
+        void SendFile(Guid sessionId, string relativePath, string hash, byte[] file);
 
         void SyncDirectories(Guid sessionId, List<string> remoteFolders);
 
@@ -20,7 +20,7 @@ namespace FileSync.Common
     }
 
 
-    public sealed class SyncFileService : ISyncFileService
+    public sealed class OneWaySyncService : IOneWaySyncService
     {
         public event Action<string> Log;
 
@@ -49,7 +49,7 @@ namespace FileSync.Common
 
                     return new SyncFileInfo
                     {
-                        Hash = alg.Hash,
+                        HashStr = alg.Hash.ToHashString(),
                         RelativePath = i.Replace(session.BaseDir, string.Empty),
                         AbsolutePath = i,
                     };
@@ -116,7 +116,7 @@ namespace FileSync.Common
             return ret;
         }
 
-        public void SendFile(Guid sessionId, string relativePath, byte[] hash, byte[] file)
+        public void SendFile(Guid sessionId, string relativePath, string hash, byte[] file)
         {
             var session = SessionStorage.Instance.GetSession(sessionId);
             if (session?.Expired ?? true)

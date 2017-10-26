@@ -24,5 +24,9 @@ namespace FileSync.Common
         public List<string> FoldersToRemove { get; } = new List<string>();
 
         public List<string> FoldersToAdd { get; } = new List<string>();
+
+        public Guid? FileTransferSession { get; set; }
+
+        public SyncDatabase SyncDb { get; set; }
     }
 }

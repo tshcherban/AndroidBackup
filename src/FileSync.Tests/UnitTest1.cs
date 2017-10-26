@@ -13,7 +13,7 @@ namespace FileSync.Tests
         [TestMethod]
         public void GetMultipleSessions_WaitsAppropriateTime_Test()
         {
-            using (var client = new TcpClient<ISyncFileService>(new IPEndPoint(IPAddress.Parse("127.0.0.1"), 9211)))
+            using (var client = new TcpClient<IOneWaySyncService>(new IPEndPoint(IPAddress.Parse("127.0.0.1"), 9211)))
             {
                 var proxy = client.Proxy;
 

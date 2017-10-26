@@ -4,8 +4,12 @@ namespace FileSync.Common
 {
     public class SyncInfo
     {
-        public List<SyncFileInfo> ToUpload { get; set; } = new List<SyncFileInfo>();
+        public List<SyncFileInfo> ToUpload { get; } = new List<SyncFileInfo>();
 
-        public List<SyncFileInfo> Conflicts { get; set; } = new List<SyncFileInfo>();
+        public List<SyncFileInfo> Conflicts { get; } = new List<SyncFileInfo>();
+
+        public List<SyncFileInfo> ToDownload { get; } = new List<SyncFileInfo>();
+
+        public List<SyncFileInfo> ToRemove { get; } = new List<SyncFileInfo>();
     }
 }

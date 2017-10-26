@@ -1,44 +1,28 @@
 ﻿using System;
-using System.Diagnostics;
-using System.IO;
-using System.Linq;
-using System.Net;
-using System.Security.Cryptography;
+using System.Threading.Tasks;
 using Android.App;
+using Android.Content;
 using Android.Widget;
 using Android.OS;
 using Android.Text.Method;
+using Android.Util;
 using Android.Views;
-using FileSync.Common;
-using ServiceWire.TcpIp;
 
 namespace FileSync.Android
 {
     [Activity(Label = "FileScanner", MainLauncher = true)]
     public class MainActivity : Activity
     {
-        private readonly Lazy<IFileService> _serviceContainer;
-
         private TextView _text;
-        private IDisposable _client;
 
         public MainActivity()
         {
-            _serviceContainer = new Lazy<IFileService>(InitService);
+            
         }
 
-        private IFileService InitService()
-        {
-            var serverUrl = "10.0.2.2";
-            var client = new TcpClient<IFileService>(new IPEndPoint(IPAddress.Parse(serverUrl), 9211));
-            _client = client;
-            return client.Proxy;
-        }
-
+        
         protected override void OnDestroy()
         {
-            _client?.Dispose();
-
             base.OnDestroy();
         }
 
@@ -57,58 +41,90 @@ namespace FileSync.Android
 
             var btn = FindViewById<Button>(Resource.Id.button1);
             btn.Click += BtnOnClick;
-            
-            return;
-            using (var alg = SHA1.Create())
-            {
-                var files = Directory.GetFiles("/storage/sdcard/dcim", "*", SearchOption.AllDirectories)
-                    .Select(fpath =>
-                    {
-                        var sha1 = alg.ComputeHash(File.OpenRead(fpath));
-                        return $"{fpath}\r\n{string.Concat(sha1.Select(s => s.ToString("x")))}";
-                    }).ToList();
-                var res = string.Join("\r\n", files);
-                _text.Text += "\r\n";
-                _text.Text += res;
-            }
+
+            var btn2 = FindViewById<Button>(Resource.Id.button2);
+            btn2.Click += Btn2OnClick;
+
+            Communicator.Ev += CommunicatorOnEv;
         }
+
+        private void CommunicatorOnEv(string s)
+        {
+            RunOnUiThread(() =>
+            {
+                _text.Text = $"{s}\r\n{_text.Text}";
+            });
+        }
+
+        private void Btn2OnClick(object sender, EventArgs e)
+        {
+            var i = new Intent(this, typeof(DemoService));
+            i.PutExtra("data", "stop");
+            var cn = StopService(i);
+        }
+
         private async void BtnOnClick(object sender, EventArgs e)
         {
-            /*var paths = string.Join("\r\n", Enum.GetValues(typeof(Environment.SpecialFolder))
-                .Cast<Environment.SpecialFolder>().Select(en =>
+            var i = new Intent(this, typeof(DemoService));
+            i.PutExtra("data", DateTime.Now.ToString("G"));
+            var cn = StartService(i);
+        }
+    }
+
+    static class Communicator
+    {
+        public static event Action<string> Ev;
+
+        public static void Log(string msg)
+        {
+            Ev?.Invoke(msg);
+        }
+    }
+
+    [Service]
+    public class DemoService : IntentService
+    {
+        public DemoService() : base("DemoService")
+        {
+            
+        }
+
+        protected override void OnHandleIntent(Intent intent)
+        {
+            var data = intent.GetStringExtra("data");
+
+            Log.Debug(GetType().Name, $"Service: {data}");
+
+            Task.Run(async () =>
+            {
+                while (true)
                 {
                     try
                     {
-                        return $"{en.ToString()}\r\n{Environment.GetFolderPath(en)}\r\n";
+                        Communicator.Log($"work {DateTime.Now:G}");
+                        await Task.Delay(1000);
                     }
-                    catch (Exception)
+                    catch (Exception e)
                     {
-                        return null;
+                        Console.WriteLine(e);
+                        
                     }
-                })
-                .Where(i => i != null).ToList());
-            _text.Text = paths;
+                }
+            }).Wait();
+        }
 
-            return;*/
+        public override ComponentName StartService(Intent service)
+        {
+            Log.Debug(GetType().Name, $"StartService");
 
-            try
-            {
-                var filePath = "/storage/sdcard/dcim/file1";
-                var fileBytes = File.ReadAllBytes(filePath);
+            return base.StartService(service);
+        }
 
-                
-                
-                var s = new Stopwatch();
-                s.Restart();
-                _serviceContainer.Value.SendFile(fileBytes);
-                s.Stop();
-                var str = $"{fileBytes.Length} bytes in {s.Elapsed.TotalMilliseconds} ms ({fileBytes.Length/ s.Elapsed.TotalSeconds :F2} bytes/s)";
-                _text.Text = str;
-            }
-            catch (Exception exception)
-            {
-                _text.Text = exception.ToString();
-            }
+        public override bool StopService(Intent name)
+        {
+            Log.Debug(GetType().Name, $"StopService");
+
+            return base.StopService(name);
         }
     }
 }

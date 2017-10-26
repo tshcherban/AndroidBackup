@@ -6,7 +6,7 @@ namespace FileSync.TestClient
     {
         static void Main(string[] args)
         {
-            var client = SyncClientFactory.GetOneWaySyncClient("127.0.0.1", 9211, @"G:\SyncTest\Src");
+            var client = SyncClientFactory.GetTwoWay("127.0.0.1", 9211, @"G:\SyncTest\Src", @"G:\SyncTest\Src\.sync");
             client.Sync();
         }
     }

@@ -47,6 +47,9 @@ namespace FileSync.Android
 			// aapt resource value: 0x7f040001
 			public const int button1 = 2130968577;
 			
+			// aapt resource value: 0x7f040002
+			public const int button2 = 2130968578;
+			
 			// aapt resource value: 0x7f040000
 			public const int editText1 = 2130968576;
 			

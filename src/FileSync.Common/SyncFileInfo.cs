@@ -3,21 +3,33 @@ using Newtonsoft.Json;
 
 namespace FileSync.Common
 {
-    public class SyncFileInfo
+    public sealed class SyncFileInfo
     {
         private string _hashStr;
 
-        public byte[] Hash { get; set; }
-
-        [JsonIgnore]
-        public string HashStr
-        {
-            get { return _hashStr ?? (_hashStr = string.Concat(Hash.Select(i => i.ToString("x")))); }
-        }
+        public string HashStr { get; set; }
         
         public string RelativePath { get; set; }
 
         [JsonIgnore]
         public string AbsolutePath { get; set; }
+
+        public SyncFileState State { get; set; }
+    }
+
+    public static class Extensions
+    {
+        public static string ToHashString(this byte[] array)
+        {
+            return string.Concat(array.Select(i => i.ToString("x")));
+        }
+    }
+
+    public enum SyncFileState
+    {
+        NotChanged,
+        New,
+        Modified,
+        Deleted,
     }
 }
