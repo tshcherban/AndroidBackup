@@ -5,35 +5,11 @@ using System.IO;
 using System.Linq;
 using System.Net.Sockets;
 using System.Security.Cryptography;
-using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
-using Newtonsoft.Json;
 
 namespace FileSync.Common
 {
-    public sealed class FileChunk
-    {
-        public byte[] Data { get; set; }
-
-        public string Hash { get; set; }
-
-        public bool IsLast { get; set; }
-    }
-
-    public sealed class FileDTO
-    {
-        public Guid Id { get; set; }
-
-        public string RelativePath { get; set; }
-
-        public string Hash { get; set; }
-
-        public long FileLength { get; set; }
-
-        public List<string> Errors { get; set; } = new List<string>();
-    }
-
     public interface ITwoWaySyncService
     {
         ServerResponseWithData<Guid> GetSession();
@@ -41,11 +17,11 @@ namespace FileSync.Common
         ServerResponseWithData<SyncInfo> GetSyncList(Guid sessionId, List<SyncFileInfo> files);
 
 
-        ServerResponseWithData<FileDTO> StartSendToServer(Guid sessionId, string relativePath, string fileHash, long fileLength);
+        ServerResponseWithData<FileSession> StartSendToServer(Guid sessionId, string relativePath, string fileHash, long fileLength);
 
-        ServerResponseWithData<FileDTO> EndSendToServer(Guid sessionId, Guid fileId);
+        ServerResponseWithData<FileSession> EndSendToServer(Guid sessionId, Guid fileId);
 
-        ServerResponseWithData<FileDTO> StartSendToClient(Guid sessionId, string relativePath);
+        ServerResponseWithData<FileSession> StartSendToClient(Guid sessionId, string relativePath);
 
         ServerResponse EndSendToClient(Guid sessionId, Guid fileId);
 
@@ -237,12 +213,18 @@ namespace FileSync.Common
             syncDb.Files.AddRange(localInfos);
         }
 
-        public ServerResponseWithData<FileDTO> StartSendToServer(Guid sessionId, string relativePath, string fileHash, long fileLength)
+        public ServerResponseWithData<FileSession> StartSendToServer(Guid sessionId, string relativePath, string fileHash, long fileLength)
         {
-            var ret = new ServerResponseWithData<FileDTO>();
+            var ret = new ServerResponseWithData<FileSession>();
 
             var session = SessionStorage.Instance.GetSession(sessionId);
-            if (session?.Expired ?? true)
+            if (session == null)
+            {
+                ret.ErrorMsg = "Session does not exist";
+                Log?.Invoke("Session does not exist");
+                return ret;
+            }
+            if (session.Expired)
             {
                 ret.ErrorMsg = "Session has expired";
                 Log?.Invoke("Session has expired");
@@ -250,9 +232,13 @@ namespace FileSync.Common
             }
 
             if (session.FileTransferSession != null)
-                throw null;
+            {
+                ret.ErrorMsg = "File transfer session already in progress";
+                Log?.Invoke("File transfer session already in progress");
+                return ret;
+            }
 
-            ret.Data = new FileDTO
+            ret.Data = new FileSession
             {
                 Id = Guid.NewGuid(),
                 RelativePath = relativePath,
@@ -328,9 +314,9 @@ namespace FileSync.Common
             tcpClient.Dispose();
         }
 
-        public ServerResponseWithData<FileDTO> EndSendToServer(Guid sessionId, Guid fileId)
+        public ServerResponseWithData<FileSession> EndSendToServer(Guid sessionId, Guid fileId)
         {
-            var ret = new ServerResponseWithData<FileDTO>();
+            var ret = new ServerResponseWithData<FileSession>();
 
             var session = SessionStorage.Instance.GetSession(sessionId);
             if (session?.Expired ?? true)
@@ -347,9 +333,9 @@ namespace FileSync.Common
             return ret;
         }
 
-        public ServerResponseWithData<FileDTO> StartSendToClient(Guid sessionId, string relativePath)
+        public ServerResponseWithData<FileSession> StartSendToClient(Guid sessionId, string relativePath)
         {
-            var ret = new ServerResponseWithData<FileDTO>();
+            var ret = new ServerResponseWithData<FileSession>();
             
             var session = SessionStorage.Instance.GetSession(sessionId);
             if (session?.Expired ?? true)
@@ -359,7 +345,7 @@ namespace FileSync.Common
                 return ret;
             }
 
-            ret.Data = new FileDTO
+            ret.Data = new FileSession
             {
                 Id = Guid.NewGuid(),
                 RelativePath = relativePath,
@@ -455,17 +441,5 @@ namespace FileSync.Common
         {
             throw new NotImplementedException();
         }
-    }
-
-    public class ServerResponse
-    {
-        public string ErrorMsg { get; set; }
-
-        public bool HasError => !string.IsNullOrEmpty(ErrorMsg);
-    }
-
-    public sealed class ServerResponseWithData<T> : ServerResponse
-    {
-        public T Data { get; set; }
     }
 }

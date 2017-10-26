@@ -28,7 +28,7 @@ namespace FileSync.Common
 
         public List<string> FoldersToAdd { get; } = new List<string>();
 
-        public FileDTO FileTransferSession { get; set; }
+        public FileSession FileTransferSession { get; set; }
 
         public SyncDatabase SyncDb { get; set; }
 
