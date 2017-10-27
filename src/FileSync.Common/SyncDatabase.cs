@@ -44,7 +44,10 @@ namespace FileSync.Common
                 if (inside && i.StartsWith(syncDbDir))
                     return null;
                 HashAlgorithm alg = SHA1.Create();
-                alg.ComputeHash(File.OpenRead(i));
+                using (var fileStream = File.OpenRead(i))
+                {
+                    alg.ComputeHash(fileStream);
+                }
                 return new SyncFileInfo
                 {
                     HashStr = alg.Hash.ToHashString(),

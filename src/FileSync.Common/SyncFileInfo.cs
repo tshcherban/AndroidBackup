@@ -1,9 +1,11 @@
-﻿using System.Diagnostics;
+﻿using System;
+using System.Diagnostics;
 using System.Linq;
 using Newtonsoft.Json;
 
 namespace FileSync.Common
 {
+    [Serializable]
     public sealed class SyncFileInfo
     {
         private string _absolutePath;
@@ -12,7 +14,7 @@ namespace FileSync.Common
 
         public string RelativePath { get; set; }
 
-        [JsonIgnore]
+        
         public string AbsolutePath
         {
             get

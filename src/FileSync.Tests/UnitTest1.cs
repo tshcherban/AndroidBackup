@@ -24,7 +24,7 @@ namespace FileSync.Tests
                 var sw = new Stopwatch();
                 sw.Start();
 
-                var ids = Enumerable.Range(1, num).AsParallel().Select(i => proxy.GetSession()).ToList();
+                var ids = Enumerable.Range(1, num).AsParallel().Select(i => proxy.GetSessionCmd()).ToList();
 
                 sw.Stop();
 
