@@ -29,23 +29,6 @@ namespace FileSync.Common
             _syncDbDir = syncDbDir;
         }
 
-        private async Task<ServerResponseWithData<Guid>> GetSession(Stream networkStream)
-        {
-            await NetworkHelper.WriteCommandHeader(networkStream, Commands.GetSessionCmd);
-
-            var cmdHeader = await NetworkHelper.ReadCommandHeader(networkStream);
-            if (cmdHeader.Command != Commands.GetSessionCmd)
-                return new ServerResponseWithData<Guid> { ErrorMsg = "Wrong command received" };
-
-            if (cmdHeader.PayloadLength == 0)
-                return new ServerResponseWithData<Guid> { ErrorMsg = "No data received" };
-
-            var responseBytes = await NetworkHelper.ReadBytes(networkStream, cmdHeader.PayloadLength);
-            var response = Serializer.Deserialize<ServerResponseWithData<Guid>>(responseBytes);
-
-            return response;
-        }
-
         public async Task Sync()
         {
             try
@@ -97,6 +80,8 @@ namespace FileSync.Common
                         }
 
                         syncDb.Store(_syncDbDir);
+
+                        await NetworkHelper.WriteCommandHeader(networkStream, Commands.DisconnectCmd);
                     }
                 }
             }
@@ -104,6 +89,23 @@ namespace FileSync.Common
             {
                 Log?.Invoke($"Error during sync {e}");
             }
+        }
+
+        private async Task<ServerResponseWithData<Guid>> GetSession(Stream networkStream)
+        {
+            await NetworkHelper.WriteCommandHeader(networkStream, Commands.GetSessionCmd);
+
+            var cmdHeader = await NetworkHelper.ReadCommandHeader(networkStream);
+            if (cmdHeader.Command != Commands.GetSessionCmd)
+                return new ServerResponseWithData<Guid> { ErrorMsg = "Wrong command received" };
+
+            if (cmdHeader.PayloadLength == 0)
+                return new ServerResponseWithData<Guid> { ErrorMsg = "No data received" };
+
+            var responseBytes = await NetworkHelper.ReadBytes(networkStream, cmdHeader.PayloadLength);
+            var response = Serializer.Deserialize<ServerResponseWithData<Guid>>(responseBytes);
+
+            return response;
         }
 
         private async Task<ServerResponse> FinishSession(Stream networkStream, Guid sessionId)
@@ -215,108 +217,6 @@ namespace FileSync.Common
             return response;
         }
 
-        /* private bool SendFiles(List<SyncFileInfo> dataToUpload)
-        {
-            foreach (var f in dataToUpload)
-            {
-                var transferId = _serverProxy.StartSendToServer(_sessionId, f.RelativePath, f.HashStr, new FileInfo($"{_baseDir}{f.RelativePath}").Length);
-                if (transferId.HasError)
-                {
-                    Log?.Invoke($"Unable to start file receive. Server response was '{transferId.ErrorMsg}'");
-                    return false;
-                }
-
-                const int chunkLength = 16 * 1024 * 1024;
-
-                var tcpClient = new System.Net.Sockets.TcpClient();
-                tcpClient.Connect(new IPEndPoint(IPAddress.Parse("127.0.0.1"), 9212));
-                using (var networkStream = tcpClient.GetStream())
-                {
-                    var buff = _sessionId.ToByteArray();
-                    networkStream.Write(buff, 0, buff.Length);
-                    buff = transferId.Data.Id.ToByteArray();
-                    networkStream.Write(buff, 0, buff.Length);
-
-                    using (var fStream = File.OpenRead($"{_baseDir}{f.RelativePath}"))
-                    {
-                        var bytesLeft = fStream.Length;
-                        var buffer = new byte[Math.Min(bytesLeft, chunkLength)];
-                        do
-                        {
-                            var readSize = (int) Math.Min(chunkLength, bytesLeft);
-                            var read = fStream.Read(buffer, 0, readSize);
-                            networkStream.Write(buffer, 0, readSize);
-                            networkStream.Flush();
-                            bytesLeft -= read;
-                        } while (bytesLeft > 0);
-
-                        networkStream.Flush();
-                    }
-                }
-
-
-                var finishResponse = _serverProxy.EndSendToServer(_sessionId, transferId.Data.Id);
-                if (finishResponse.HasError)
-                {
-                    Log?.Invoke($"Unable to finish file send. Server response was '{transferId.ErrorMsg}'");
-                    return false;
-                }
-                if (finishResponse.Data.Errors.Count > 0)
-                {
-                    Log?.Invoke("");
-                }
-            }
-
-            return true;
-        }
-
-        private bool ReceiveFiles(ServerResponseWithData<SyncInfo> syncList)
-        {
-            foreach (var f in syncList.Data.ToDownload)
-            {
-                var transferId = _serverProxy.StartSendToClient(_sessionId, f.RelativePath);
-                if (transferId.HasError)
-                {
-                    Log?.Invoke($"Unable to start file receive. Server response was '{transferId.ErrorMsg}'");
-                    return false;
-                }
-
-                var tcpClient = new System.Net.Sockets.TcpClient();
-                tcpClient.Connect(new IPEndPoint(IPAddress.Parse("127.0.0.1"), 9212));
-                using (var stream = tcpClient.GetStream())
-                {
-                    var buffer = new byte[16];
-                    stream.Write(_sessionId.ToByteArray(), 0, 16);
-                    stream.Write(transferId.Data.Id.ToByteArray(), 0, 16);
-
-                    const int chunkLength = 16 * 1024 * 1024;
-
-                    var bytesLeft = transferId.Data.FileLength;
-                    buffer = new byte[Math.Min(bytesLeft, chunkLength)];
-
-                    using (var fStream = File.Create($"{_baseDir}{transferId.Data.RelativePath}._sync"))
-                    {
-                        do
-                        {
-                            var readSize = (int) Math.Min(chunkLength, bytesLeft);
-                            var read = stream.Read(buffer, 0, readSize);
-                            bytesLeft -= read;
-                            fStream.Write(buffer, 0, readSize);
-                        } while (bytesLeft > 0);
-                    }
-                }
-                tcpClient.Dispose();
-
-                var resp = _serverProxy.EndSendToClient(_sessionId, transferId.Data.Id);
-                if (resp.HasError)
-                {
-                    Log?.Invoke($"Unable to complete file receive. Server response was '{resp.ErrorMsg}'");
-                    return false;
-                }
-            }
-            return true;
-        }
-*/
         private SyncDatabase GetLocalSyncDb(out string error)
         {
             error = null;

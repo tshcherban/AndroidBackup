@@ -20,6 +20,8 @@ namespace FileSync.Common
         public const byte SendFileCmd = 0x04;
 
         public const byte FinishSessionCmd = 0x05;
+
+        public const byte DisconnectCmd = 0x06;
     }
 
     public class CommandHeader
