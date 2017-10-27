@@ -40,8 +40,10 @@ namespace FileSync.Common
             _tcpListener = tcpListener;
         }
 
+
         public event Action<string> Log;
-        public ServerResponseWithData<Guid> GetSession()
+
+        public Guid GetSession()
         {
             var ret = new ServerResponseWithData<Guid>();
 

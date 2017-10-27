@@ -3,7 +3,6 @@ using System.Linq;
 using System.Net;
 using FileSync.Common;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
-using ServiceWire.TcpIp;
 
 namespace FileSync.Tests
 {
@@ -13,7 +12,7 @@ namespace FileSync.Tests
         [TestMethod]
         public void GetMultipleSessions_WaitsAppropriateTime_Test()
         {
-            using (var client = new TcpClient<IOneWaySyncService>(new IPEndPoint(IPAddress.Parse("127.0.0.1"), 9211)))
+            /*using (var client = new TcpClient<IOneWaySyncService>(new IPEndPoint(IPAddress.Parse("127.0.0.1"), 9211)))
             {
                 var proxy = client.Proxy;
 
@@ -33,7 +32,7 @@ namespace FileSync.Tests
 
                 Assert.IsTrue(sw.Elapsed.TotalSeconds <= expectedTimeMax && sw.Elapsed.TotalSeconds >= expectedTimeMin,
                     $"Got {num} sessions in {sw.Elapsed.TotalSeconds} s, but expected in {expectedTimeMin} - {expectedTimeMax} s");
-            }
+            }*/
         }
     }
 }

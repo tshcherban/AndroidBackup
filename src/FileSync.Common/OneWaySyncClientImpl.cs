@@ -4,7 +4,6 @@ using System.Linq;
 using System.Net;
 using System.Security.Cryptography;
 using System.Threading.Tasks;
-using ServiceWire.TcpIp;
 
 namespace FileSync.Common
 {
@@ -45,7 +44,7 @@ namespace FileSync.Common
 
         public void Sync()
         {
-            using (var client = new TcpClient<IOneWaySyncService>(new IPEndPoint(IPAddress.Parse(_serverAddress), _serverPort)))
+            /*using (var client = new TcpClient<IOneWaySyncService>(new IPEndPoint(IPAddress.Parse(_serverAddress), _serverPort)))
             {
                 var proxy = client.Proxy;
 
@@ -74,7 +73,7 @@ namespace FileSync.Common
                 proxy.SyncDirectories(sessionId, folders);
 
                 proxy.CompleteSession(sessionId);
-            }
+            }*/
         }
     }
 }
