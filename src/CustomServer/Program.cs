@@ -86,6 +86,7 @@ namespace FileSync.Server
 
             var program = new Program();
             program.StartListener();
+            Console.WriteLine("Listening. Press return to quit");
 
             while (Console.ReadKey().Key != ConsoleKey.Enter) ;
 
