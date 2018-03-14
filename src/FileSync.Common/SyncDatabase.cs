@@ -25,7 +25,10 @@ namespace FileSync.Common
             {
                 var db = JsonConvert.DeserializeObject<SyncDatabase>(File.ReadAllText(fileName));
                 foreach (var f in db.Files)
+                {
                     f.AbsolutePath = $"{baseDir}{f.RelativePath}";
+                    f.State = SyncFileState.NotChanged;
+                }
                 return db;
             }
             catch (Exception e)

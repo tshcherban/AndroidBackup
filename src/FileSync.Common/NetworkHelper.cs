@@ -1,16 +1,17 @@
 ﻿using System;
 using System.IO;
 using System.Net.Sockets;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace FileSync.Common
 {
     public static class NetworkHelper
     {
-        public static async Task<CommandHeader> ReadCommandHeader(Stream stream)
+        public static async Task<CommandHeader> ReadCommandHeader(Stream stream, CancellationToken? token = null)
         {
-            var commandHeaderBytes = await ReadBytes(stream, Commands.PreambleLength + Commands.CommandLength);
-            var payloadLengthBytes = await ReadBytes(stream, sizeof(int));
+            var commandHeaderBytes = await ReadBytes(stream, Commands.PreambleLength + Commands.CommandLength, token);
+            var payloadLengthBytes = await ReadBytes(stream, sizeof(int), token);
             var payloadLength = BitConverter.ToInt32(payloadLengthBytes, 0);
 
             var ret = new CommandHeader(commandHeaderBytes[Commands.PreambleLength])
@@ -51,14 +52,14 @@ namespace FileSync.Common
             await stream.FlushAsync();
         }
 
-        public static async Task<byte[]> ReadBytes(Stream stream, int count)
+        public static async Task<byte[]> ReadBytes(Stream stream, int count, CancellationToken? token = null)
         {
             var bytesRead = 0;
             var buffer = new byte[count];
             var bytesLeft = count;
             do
             {
-                bytesRead = await stream.ReadAsync(buffer, bytesRead, bytesLeft);
+                bytesRead = await stream.ReadAsync(buffer, bytesRead, bytesLeft, token ?? CancellationToken.None);
                 if (bytesRead == 0)
                     break;
 

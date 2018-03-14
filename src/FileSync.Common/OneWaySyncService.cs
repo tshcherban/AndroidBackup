@@ -28,7 +28,7 @@ namespace FileSync.Common
         {
             var session = SessionStorage.Instance.GetNewSession();
             session.BaseDir = @"G:\SyncTest\Dst"; // TODO get from config/client/etc
-            session.ServiceDir = Path.Combine(session.BaseDir, ".sync");
+            session.SyncDbDir = Path.Combine(session.BaseDir, ".sync");
             Log?.Invoke($"Session {session.Id} started");
             return session.Id;
         }
@@ -99,14 +99,14 @@ namespace FileSync.Common
             var cnt = 1;
             if (filesToRemove.Count > 0)
             {
-                if (!Directory.Exists(session.ServiceDir))
-                    Directory.CreateDirectory(session.ServiceDir);
+                if (!Directory.Exists(session.SyncDbDir))
+                    Directory.CreateDirectory(session.SyncDbDir);
 
                 foreach (var fileToRemove in filesToRemove)
                 {
-                    var destFileName = Path.Combine(session.ServiceDir, cnt++.ToString());
+                    var destFileName = Path.Combine(session.SyncDbDir, cnt++.ToString());
                     while (File.Exists(destFileName))
-                        destFileName = Path.Combine(session.ServiceDir, cnt++.ToString());
+                        destFileName = Path.Combine(session.SyncDbDir, cnt++.ToString());
 
                     File.Move(fileToRemove.AbsolutePath, destFileName);
                     session.FilesForDeletion.Add((destFileName, fileToRemove.AbsolutePath));
@@ -180,8 +180,8 @@ namespace FileSync.Common
                 }
             }
 
-            if (Directory.Exists(session.ServiceDir))
-                Directory.Delete(session.ServiceDir);
+            if (Directory.Exists(session.SyncDbDir))
+                Directory.Delete(session.SyncDbDir);
 
             Log?.Invoke($"Session {session.Id} completed (in {DateTime.Now - session.CreateTime:g})");
             Log?.Invoke("");

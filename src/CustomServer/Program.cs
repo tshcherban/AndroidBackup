@@ -85,7 +85,7 @@ namespace FileSync.Server
             }
 
             var program = new Program();
-            program.StartListener().Wait();
+            program.StartListener();
 
             while (Console.ReadKey().Key != ConsoleKey.Enter) ;
 
@@ -98,6 +98,4 @@ namespace FileSync.Server
             Trace.WriteLine(obj);
         }
     }
-
-    
 }

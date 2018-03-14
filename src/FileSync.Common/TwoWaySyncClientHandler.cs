@@ -12,6 +12,7 @@ namespace FileSync.Common
     {
         private readonly TcpClient _tcpClient;
         private NetworkStream _networkStream;
+        private bool _connected;
 
         public TwoWaySyncClientHandler(TcpClient tcpClient)
         {
@@ -22,35 +23,55 @@ namespace FileSync.Common
         {
             _networkStream = _tcpClient.GetStream();
             {
-                var run = true;
-                while (run)
+                _connected = true;
+                while (_connected)
                 {
-                    var cmdHeader = await NetworkHelper.ReadCommandHeader(_networkStream);
+                    await ProcessCommands();
+                }
+            }
+        }
 
-                    switch (cmdHeader.Command)
-                    {
-                        case Commands.GetSessionCmd:
-                            await ProcessGetSessionCmd();
-                            break;
-                        case Commands.GetSyncListCmd:
-                            await ProcessGetSyncListCmd(cmdHeader);
-                            break;
-                        case Commands.GetFileCmd:
-                            await ProcessGetFileCmd(cmdHeader);
-                            break;
-                        case Commands.SendFileCmd:
-                            await ProcessSendFileCmd(cmdHeader);
-                            break;
-                        case Commands.FinishSessionCmd:
-                            await ProcessFinishSessionCmd(cmdHeader);
-                            break;
-                        case Commands.DisconnectCmd:
-                            run = false;
-                            break;
-                        default:
-                            run = false;
-                            break;
-                    }
+        private async Task ProcessCommands()
+        {
+            try
+            {
+                var cmdHeader = await NetworkHelper.ReadCommandHeader(_networkStream);
+
+                switch (cmdHeader.Command)
+                {
+                    case Commands.GetSessionCmd:
+                        await ProcessGetSessionCmd();
+                        break;
+                    case Commands.GetSyncListCmd:
+                        await ProcessGetSyncListCmd(cmdHeader);
+                        break;
+                    case Commands.GetFileCmd:
+                        await ProcessGetFileCmd(cmdHeader);
+                        break;
+                    case Commands.SendFileCmd:
+                        await ProcessSendFileCmd(cmdHeader);
+                        break;
+                    case Commands.FinishSessionCmd:
+                        await ProcessFinishSessionCmd(cmdHeader);
+                        break;
+                    case Commands.DisconnectCmd:
+                        _connected = false;
+                        break;
+                    default:
+                        _connected = false;
+                        break;
+                }
+            }
+            catch (Exception e)
+            {
+                if (_connected)
+                {
+                    Debugger.Break();
+                    _connected = false;
+                }
+                else
+                {
+                    // client disconnected
                 }
             }
         }
@@ -62,7 +83,12 @@ namespace FileSync.Common
             {
                 var session = SessionStorage.Instance.GetNewSession();
                 session.BaseDir = @"G:\SyncTest\Dst"; // TODO get from config/client/etc
-                session.ServiceDir = Path.Combine(session.BaseDir, ".sync");
+                session.SyncDbDir = Path.Combine(session.BaseDir, ".sync");
+                if (!Directory.Exists(session.SyncDbDir))
+                {
+                    var dirInfo = Directory.CreateDirectory(session.SyncDbDir);
+                    dirInfo.Attributes = dirInfo.Attributes | FileAttributes.Hidden;
+                }
                 response.Data = session.Id;
             }
             catch (Exception e)
@@ -94,14 +120,52 @@ namespace FileSync.Common
             }
             else
             {
-                session.SyncDb = SyncDatabase.Initialize(session.BaseDir, session.ServiceDir);
-                session.SyncDb.Store(session.ServiceDir);
+                try
+                {
+                    FinishSession(session);
+                }
+                catch (Exception e)
+                {
+                    response.ErrorMsg = e.ToString();
+                }
+
+                session.SyncDb = SyncDatabase.Initialize(session.BaseDir, session.SyncDbDir);
+                session.SyncDb.Store(session.SyncDbDir);
             }
 
             var responseBytes = Serializer.Serialize(response);
             var length = responseBytes.Length;
-            await NetworkHelper.WriteCommandHeader(_networkStream, Commands.GetSyncListCmd, length);
+            await NetworkHelper.WriteCommandHeader(_networkStream, Commands.FinishSessionCmd, length);
             await NetworkHelper.WriteBytes(_networkStream, responseBytes);
+        }
+
+        private void FinishSession(Session session)
+        {
+            var filesToRemove = $"{session.SyncDbDir}\\toremove.txt";
+            if (File.Exists(filesToRemove))
+            {
+                var removeLines = File.ReadAllLines(filesToRemove);
+                if (removeLines.Length % 2 != 0)
+                    throw new InvalidOperationException("Service file structure corrupt");
+
+                for (var i = 0; i < removeLines.Length - 1; i += 2)
+                    File.Delete(removeLines[i]);
+
+                File.Delete(filesToRemove);
+            }
+
+            var newFiles = $"{session.SyncDbDir}\\newfiles.txt";
+            if (File.Exists(newFiles))
+            {
+                var newLines = File.ReadAllLines(newFiles);
+                if (newLines.Length % 2 != 0)
+                    throw new InvalidOperationException("Service file structure corrupt");
+
+                for (var i = 0; i < newLines.Length - 1; i += 2)
+                    File.Move(newLines[i], newLines[i + 1]);
+
+                File.Delete(newFiles);
+            }
         }
 
         private async Task ProcessSendFileCmd(CommandHeader cmdHeader)
@@ -123,8 +187,13 @@ namespace FileSync.Common
             }
             else
             {
-                var filePath = $"{session.BaseDir}{data.RelativeFilePath}._sync";
-                await NetworkHelper.ReadToFile(_networkStream, filePath, data.FileLength);
+                var filePath = $"{session.BaseDir}{data.RelativeFilePath}";
+                var filePathTemp = filePath+"._sn";
+                while (File.Exists(filePathTemp))
+                    filePathTemp += "._sn";
+                await NetworkHelper.ReadToFile(_networkStream, filePathTemp, data.FileLength);
+
+                File.AppendAllText($"{session.SyncDbDir}\\newfiles.txt", $"{filePathTemp}\r\n{filePath}\r\n");
             }
         }
 
@@ -175,7 +244,7 @@ namespace FileSync.Common
             }
             else
             {
-                var syncDb = GetSyncDb(session.BaseDir, session.ServiceDir, out var error);
+                var syncDb = GetSyncDb(session.BaseDir, session.SyncDbDir, out var error);
                 if (syncDb == null)
                 {
                     ret.ErrorMsg = error;
@@ -202,7 +271,13 @@ namespace FileSync.Common
                                 case SyncFileState.Deleted:
                                     if (localFileInfo.State == SyncFileState.NotChanged || localFileInfo.State == SyncFileState.Deleted)
                                     {
-                                        ; // TODO delete file locally
+                                        var filePath = $"{session.BaseDir}{localFileInfo.RelativePath}";
+                                        var movedFilePath = filePath + "._sr";
+                                        while (File.Exists(movedFilePath))
+                                            movedFilePath += "._sr";
+
+                                        File.Move(filePath, movedFilePath);
+                                        File.AppendAllText($"{session.BaseDir}\\toremove.txt", $"{movedFilePath}\r\n{filePath}\r\n");
                                     }
                                     else if (localFileInfo.State == SyncFileState.New)
                                         syncInfo.ToDownload.Add(localFileInfo);

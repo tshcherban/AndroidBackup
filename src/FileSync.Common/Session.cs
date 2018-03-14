@@ -18,7 +18,7 @@ namespace FileSync.Common
 
         public string BaseDir { get; set; }
 
-        public string ServiceDir { get; set; }
+        public string SyncDbDir { get; set; }
 
         public List<(string, string)> FilesForDeletion { get; } = new List<(string, string)>();
 

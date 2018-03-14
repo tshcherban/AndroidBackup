@@ -48,6 +48,12 @@ namespace FileSync.Common
 
                         _sessionId = sessionId.Data;
 
+                        if (!Directory.Exists(_syncDbDir))
+                        {
+                            var dirInfo = Directory.CreateDirectory(_syncDbDir);
+                            dirInfo.Attributes = dirInfo.Attributes | FileAttributes.Hidden;
+                        }
+
                         var syncDb = GetLocalSyncDb(out var error);
                         if (syncDb == null)
                         {
@@ -60,6 +66,14 @@ namespace FileSync.Common
                         {
                             Log?.Invoke($"Unable to get sync list. Server response was '{syncList.ErrorMsg}'");
                             return;
+                        }
+
+                        foreach (var fileInfo in syncList.Data.ToRemove)
+                        {
+                            var filePath = $"{_baseDir}{fileInfo.RelativePath}";
+                            var movedFilePath = filePath + "._sr";
+                            File.Move(filePath, movedFilePath);
+                            File.AppendAllText($"{_baseDir}\\toremove.txt", $"{movedFilePath}{filePath}");
                         }
 
                         if (syncList.Data.Conflicts.Count > 0)
@@ -77,7 +91,10 @@ namespace FileSync.Common
                         if (response.HasError)
                         {
                             Log?.Invoke($"Error finishing session. Server response was '{response.ErrorMsg}'");
+                            return;
                         }
+
+                        FinishLocalSession();
 
                         syncDb.Store(_syncDbDir);
 
@@ -88,6 +105,35 @@ namespace FileSync.Common
             catch (Exception e)
             {
                 Log?.Invoke($"Error during sync {e}");
+            }
+        }
+
+        private void FinishLocalSession()
+        {
+            var filesToRemove = $"{_syncDbDir}\\toremove.txt";
+            if (File.Exists(filesToRemove))
+            {
+                var removeLines = File.ReadAllLines(filesToRemove);
+                if (removeLines.Length % 2 != 0)
+                    throw new InvalidOperationException("Service file structure corrupt");
+
+                for (var i = 0; i < removeLines.Length - 1; i += 2)
+                    File.Delete(removeLines[i]);
+
+                File.Delete(filesToRemove);
+            }
+
+            var newFiles = $"{_syncDbDir}\\newfiles.txt";
+            if (File.Exists(newFiles))
+            {
+                var newLines = File.ReadAllLines(newFiles);
+                if (newLines.Length % 2 != 0)
+                    throw new InvalidOperationException("Service file structure corrupt");
+
+                for (var i = 0; i < newLines.Length - 1; i += 2)
+                    File.Move(newLines[i], newLines[i + 1]);
+
+                File.Delete(newFiles);
             }
         }
 
@@ -144,15 +190,6 @@ namespace FileSync.Common
                 var dataBytes = Serializer.Serialize(data);
                 await NetworkHelper.WriteCommandHeader(networkStream, Commands.SendFileCmd, dataBytes.Length);
                 await NetworkHelper.WriteBytes(networkStream, dataBytes);
-
-                /*var cmdHeader = await NetworkHelper.ReadCommandHeader(networkStream);
-                if (cmdHeader.Command != Commands.SendFileCmd)
-                    return false;
-
-                if (cmdHeader.PayloadLength == 0)
-                    return false;
-                    */
-
                 await NetworkHelper.WriteFromFile(networkStream, filePath);
             }
 
@@ -183,9 +220,11 @@ namespace FileSync.Common
                 var fileLengthBytes = await NetworkHelper.ReadBytes(networkStream, cmdHeader.PayloadLength);
                 var fileLength = BitConverter.ToInt64(fileLengthBytes, 0);
 
-                var filePath = $"{_baseDir}{fileInfo.RelativePath}._sync";
+                var tmpFilePath = $"{_baseDir}{fileInfo.RelativePath}._sn";
+                var filePath = $"{_baseDir}{fileInfo.RelativePath}";
+                await NetworkHelper.ReadToFile(networkStream, tmpFilePath, fileLength);
 
-                await NetworkHelper.ReadToFile(networkStream, filePath, fileLength);
+                File.AppendAllText($"{_syncDbDir}\\newfiles.txt", $"{tmpFilePath}\r\n{filePath}\r\n\r\n");
             }
 
             return true;

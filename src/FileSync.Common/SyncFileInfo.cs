@@ -14,7 +14,7 @@ namespace FileSync.Common
 
         public string RelativePath { get; set; }
 
-        
+        [JsonIgnore]
         public string AbsolutePath
         {
             get
