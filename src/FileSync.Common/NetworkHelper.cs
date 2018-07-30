@@ -89,6 +89,19 @@ namespace FileSync.Common
                 Directory.CreateDirectory(folder);
             }
 
+            if (fileLength == 0)
+            {
+                using (var fileStream = File.Create(filePath))
+                {
+                    fileStream.Close();
+                }
+
+                using (HashAlgorithm alg = SHA1.Create())
+                {
+                    return alg.ComputeHash(buffer).ToHashString();
+                }
+            }
+
             using (HashAlgorithm alg = SHA1.Create())
             {
                 using (var fileStream = File.Create(filePath))

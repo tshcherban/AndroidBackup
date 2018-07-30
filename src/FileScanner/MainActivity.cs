@@ -87,7 +87,7 @@ namespace FileSync.Android
 
             _tcs = new TaskCompletionSource<bool>();
 
-            RequestPermissions(Permissions, RequestId);
+            Task.Run(() => { RequestPermissions(Permissions, RequestId); });
 
             const int timeout = 10000;
             var task = _tcs.Task;
@@ -97,6 +97,8 @@ namespace FileSync.Android
 
         public override void OnRequestPermissionsResult(int requestCode, string[] permissions, Permission[] grantResults)
         {
+            base.OnRequestPermissionsResult(requestCode, permissions, grantResults);
+
             if (requestCode == RequestId)
             {
                 _tcs.SetResult(grantResults[0] == Permission.Granted);
@@ -115,9 +117,10 @@ namespace FileSync.Android
 
             Toast.MakeText(this, "Storage permission allowed. Starting sync...", ToastLength.Short).Show();
 
+            var client = SyncClientFactory.GetTwoWay("192.168.2.6", 9211, @"/mnt/sdcard", @"/mnt/sdcard/.sync");
+            //var client = SyncClientFactory.GetTwoWay("192.168.2.6", 9211, @"/storage/emulated/0/stest/", @"/storage/emulated/0/stest/.sync");
             //var client = SyncClientFactory.GetTwoWay("192.168.2.3", 9211, @"/storage/emulated/0/stest/", @"/storage/emulated/0/stest/.sync");
-            var client = SyncClientFactory.GetTwoWay("192.168.137.1", 9211, @"/storage/emulated/0/stest/",
-                @"/storage/emulated/0/stest/.sync");
+            //var client = SyncClientFactory.GetTwoWay("192.168.137.1", 9211, @"/storage/emulated/0/stest/", @"/storage/emulated/0/stest/.sync");
             client.Log += s => RunOnUiThread(() => { _text.Text = $"{s}\r\n{_text.Text}"; });
             await client.Sync();
 

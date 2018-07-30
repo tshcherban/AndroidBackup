@@ -221,6 +221,18 @@ namespace FileSync.Common
 
         private async Task<bool> ReceiveFiles(Stream networkStream, IEnumerable<SyncFileInfo> dataToDownload)
         {
+            var newFilesList = Path.Combine(_syncDbDir, FileListToAddorUpdate);
+            var directoryName = Path.GetDirectoryName(newFilesList);
+            if (directoryName == null)
+            {
+                throw new InvalidOperationException("Unable get syncDb folder");
+            }
+
+            if (!Directory.Exists(directoryName))
+            {
+                Directory.CreateDirectory(directoryName);
+            }
+
             foreach (var fileInfo in dataToDownload)
             {
                 var data = new GetFileCommandData
@@ -247,8 +259,12 @@ namespace FileSync.Common
                 var filePath = Path.Combine(_baseDir, fileInfo.RelativePath);
                 var newHash = await NetworkHelper.ReadToFile(networkStream, tmpFilePath, fileLength);
 
-                var newFiles = Path.Combine(_syncDbDir, FileListToAddorUpdate);
-                File.AppendAllText(newFiles, $"{tmpFilePath}\r\n{filePath}\r\n\r\n");
+                if (!string.Equals(newHash, fileInfo.HashStr, StringComparison.OrdinalIgnoreCase))
+                {
+                    throw new InvalidOperationException("File copy error");
+                }
+
+                File.AppendAllText(newFilesList, $"{tmpFilePath}\r\n{filePath}\r\n\r\n");
             }
 
             return true;

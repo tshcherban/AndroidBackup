@@ -69,7 +69,10 @@ namespace FileSync.Server
         {
             await Task.Yield();
 
-            using (var clientHandler = new TwoWaySyncClientHandler(tcpClient, @"C:\shcherban\stest"))
+            //const string path = @"C:\shcherban\stest";
+            const string path = @"H:\SyncTest\Dst";
+
+            using (var clientHandler = new TwoWaySyncClientHandler(tcpClient, path))
             {
                 await clientHandler.Process();
             }
