@@ -31,7 +31,5 @@ namespace FileSync.Common
         public FileSession FileTransferSession { get; set; }
 
         public SyncDatabase SyncDb { get; set; }
-
-        public Task SendTask { get; set; }
     }
 }

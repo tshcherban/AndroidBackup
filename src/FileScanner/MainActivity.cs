@@ -1,7 +1,9 @@
 ﻿using System;
 using System.Threading.Tasks;
+using Android;
 using Android.App;
 using Android.Content;
+using Android.Content.PM;
 using Android.Widget;
 using Android.OS;
 using Android.Text.Method;
@@ -18,10 +20,9 @@ namespace FileSync.Android
 
         public MainActivity()
         {
-            
         }
 
-        
+
         protected override void OnDestroy()
         {
             base.OnDestroy();
@@ -51,27 +52,73 @@ namespace FileSync.Android
 
         private void CommunicatorOnEv(string s)
         {
-            RunOnUiThread(() =>
-            {
-                _text.Text = $"{s}\r\n{_text.Text}";
-            });
+            RunOnUiThread(() => { _text.Text = $"{s}\r\n{_text.Text}"; });
         }
 
         private void Btn2OnClick(object sender, EventArgs e)
         {
+            return;
             var i = new Intent(this, typeof(DemoService));
             i.PutExtra("data", "stop");
             var cn = StopService(i);
         }
 
+        readonly string[] Permissions =
+        {
+            Manifest.Permission.ReadExternalStorage,
+            Manifest.Permission.WriteExternalStorage,
+        };
+
+        private const int RequestId = 1;
+
+        TaskCompletionSource<bool> _tcs;
+
+        private async Task<bool> TryGetpermissionsAsync()
+        {
+            if ((int) Build.VERSION.SdkInt < 23)
+            {
+                return false;
+            }
+
+            if (CheckSelfPermission(Permissions[0]) == (int) Permission.Granted)
+            {
+                return true;
+            }
+
+            _tcs = new TaskCompletionSource<bool>();
+
+            RequestPermissions(Permissions, RequestId);
+
+            const int timeout = 10000;
+            var task = _tcs.Task;
+
+            return await Task.WhenAny(task, Task.Delay(timeout)) == task;
+        }
+
+        public override void OnRequestPermissionsResult(int requestCode, string[] permissions, Permission[] grantResults)
+        {
+            if (requestCode == RequestId)
+            {
+                _tcs.SetResult(grantResults[0] == Permission.Granted);
+            }
+        }
+
         private async void BtnOnClick(object sender, EventArgs e)
         {
-            //var client = SyncClientFactory.GetTwoWay("192.168.2.3", 9211, @"/storage/emulated/0/stest/", @"/storage/emulated/0/stest/.sync");
-            var client = SyncClientFactory.GetTwoWay("192.168.137.1", 9211, @"/storage/emulated/0/stest/", @"/storage/emulated/0/stest/.sync");
-            client.Log += s => RunOnUiThread(() =>
+            var res = await TryGetpermissionsAsync();
+            if (!res)
             {
-                _text.Text = $"{s}\r\n{_text.Text}";
-            });
+                Toast.MakeText(this, "Storage permission denied.", ToastLength.Short).Show();
+
+                return;
+            }
+
+            Toast.MakeText(this, "Storage permission allowed. Starting sync...", ToastLength.Short).Show();
+
+            //var client = SyncClientFactory.GetTwoWay("192.168.2.3", 9211, @"/storage/emulated/0/stest/", @"/storage/emulated/0/stest/.sync");
+            var client = SyncClientFactory.GetTwoWay("192.168.137.1", 9211, @"/storage/emulated/0/stest/",
+                @"/storage/emulated/0/stest/.sync");
+            client.Log += s => RunOnUiThread(() => { _text.Text = $"{s}\r\n{_text.Text}"; });
             await client.Sync();
 
             return;
@@ -96,7 +143,6 @@ namespace FileSync.Android
     {
         public DemoService() : base("DemoService")
         {
-            
         }
 
         protected override void OnHandleIntent(Intent intent)
@@ -117,7 +163,6 @@ namespace FileSync.Android
                     catch (Exception e)
                     {
                         Console.WriteLine(e);
-                        
                     }
                 }
             }).Wait();

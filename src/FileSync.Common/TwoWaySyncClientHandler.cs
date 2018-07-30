@@ -69,7 +69,10 @@ namespace FileSync.Common
                 if (_connected)
                 {
                     Debugger.Break();
+
                     _connected = false;
+
+                    Console.WriteLine($"unexpected error:\r\n{e}");
                 }
                 else
                 {
@@ -91,12 +94,14 @@ namespace FileSync.Common
                     var dirInfo = Directory.CreateDirectory(session.SyncDbDir);
                     dirInfo.Attributes = dirInfo.Attributes | FileAttributes.Hidden;
                 }
+
                 response.Data = session.Id;
             }
             catch (Exception e)
             {
                 response.ErrorMsg = e.ToString();
             }
+
             var responseBytes = Serializer.Serialize(response);
             var length = responseBytes.Length;
             await NetworkHelper.WriteCommandHeader(_networkStream, Commands.GetSessionCmd, length);
@@ -148,10 +153,20 @@ namespace FileSync.Common
             {
                 var removeLines = File.ReadAllLines(filesToRemove);
                 if (removeLines.Length % 2 != 0)
+                {
                     throw new InvalidOperationException("Service file structure corrupt");
+                }
 
                 for (var i = 0; i < removeLines.Length - 1; i += 2)
+                {
                     File.Delete(removeLines[i]);
+
+                    var fileInfo = session.SyncDb.Files.FirstOrDefault(j => j.AbsolutePath == removeLines[i]);
+                    if (fileInfo != null)
+                    {
+                        session.SyncDb.Files.Remove(fileInfo);
+                    }
+                }
 
                 File.Delete(filesToRemove);
             }
@@ -161,10 +176,14 @@ namespace FileSync.Common
             {
                 var newLines = File.ReadAllLines(newFiles);
                 if (newLines.Length % 2 != 0)
+                {
                     throw new InvalidOperationException("Service file structure corrupt");
+                }
 
                 for (var i = 0; i < newLines.Length - 1; i += 2)
+                {
                     File.Move(newLines[i], newLines[i + 1]);
+                }
 
                 File.Delete(newFiles);
             }
@@ -190,10 +209,19 @@ namespace FileSync.Common
             else
             {
                 var filePath = Path.Combine(session.BaseDir, data.RelativeFilePath);
-                var filePathTemp = filePath+"._sn";
+                var filePathTemp = filePath + "._sn";
                 while (File.Exists(filePathTemp))
+                {
                     filePathTemp += "._sn";
-                await NetworkHelper.ReadToFile(_networkStream, filePathTemp, data.FileLength);
+                }
+
+                var newHash = await NetworkHelper.ReadToFile(_networkStream, filePathTemp, data.FileLength);
+
+                var fileInfo = session.SyncDb.Files.FirstOrDefault(i => i.RelativePath == data.RelativeFilePath);
+                if (fileInfo != null)
+                {
+                    fileInfo.HashStr = newHash;
+                }
 
                 var path = Path.Combine(session.SyncDbDir, "newfiles.txt");
                 File.AppendAllText(path, $"{filePathTemp}\r\n{filePath}\r\n");
@@ -260,7 +288,8 @@ namespace FileSync.Common
 
                     foreach (var localFileInfo in syncDb.Files)
                     {
-                        var remoteFileInfo = data.Files.FirstOrDefault(remoteFile => remoteFile.RelativePath == localFileInfo.RelativePath);
+                        var remoteFileInfo = data.Files.FirstOrDefault(remoteFile =>
+                            remoteFile.RelativePath == localFileInfo.RelativePath);
                         if (remoteFileInfo == null)
                         {
                             syncInfo.ToDownload.Add(localFileInfo);
@@ -272,7 +301,8 @@ namespace FileSync.Common
                             switch (remoteFileInfo.State)
                             {
                                 case SyncFileState.Deleted:
-                                    if (localFileInfo.State == SyncFileState.NotChanged || localFileInfo.State == SyncFileState.Deleted)
+                                    if (localFileInfo.State == SyncFileState.NotChanged ||
+                                        localFileInfo.State == SyncFileState.Deleted)
                                     {
                                         var filePath = Path.Combine(session.BaseDir, localFileInfo.RelativePath);
                                         var movedFilePath = filePath + "._sr";
@@ -287,6 +317,7 @@ namespace FileSync.Common
                                         syncInfo.ToDownload.Add(localFileInfo);
                                     else
                                         syncInfo.Conflicts.Add(localFileInfo);
+
                                     break;
                                 case SyncFileState.New:
                                     syncInfo.Conflicts.Add(localFileInfo);
@@ -306,6 +337,7 @@ namespace FileSync.Common
                                     {
                                         Debugger.Break(); // not possible
                                     }
+
                                     break;
                             }
                         }
@@ -371,7 +403,10 @@ namespace FileSync.Common
                     localFiles.RemoveAt(localFileIdx);
                     using (HashAlgorithm alg = SHA1.Create())
                     {
-                        alg.ComputeHash(File.OpenRead(localFile));
+                        using (var localFileStream = File.OpenRead(localFile))
+                        {
+                            alg.ComputeHash(localFileStream);
+                        }
 
                         if (alg.Hash.ToHashString() != stored.HashStr)
                             stored.State = SyncFileState.Modified;
@@ -416,7 +451,7 @@ namespace FileSync.Common
             }
             catch (Exception e)
             {
-                Trace.WriteLine(e);
+                Trace.WriteLine($"Error while disposing handler (from finalizer {disposing}):\r\n{e}");
             }
         }
 

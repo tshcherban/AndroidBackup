@@ -1,6 +1,7 @@
 ﻿using System;
 using System.IO;
 using System.Net.Sockets;
+using System.Security.Cryptography;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -69,7 +70,7 @@ namespace FileSync.Common
             return buffer;
         }
 
-        public static async Task ReadToFile(Stream networkStream, string filePath, long fileLength)
+        public static async Task<string> ReadToFile(Stream networkStream, string filePath, long fileLength)
         {
             const int chunkSize = 16 * 1024 * 1024;
 
@@ -78,25 +79,44 @@ namespace FileSync.Common
             var bytesLeft = fileLength;
 
             var folder = Path.GetDirectoryName(filePath);
-            if (!Directory.Exists(folder))
-                Directory.CreateDirectory(folder);
-
-            using (var fileStream = File.Create(filePath))
+            if (folder == null)
             {
-                do
+                throw new InvalidOperationException($"Failed to get file '{filePath}' folder");
+            }
+
+            if (!Directory.Exists(folder))
+            {
+                Directory.CreateDirectory(folder);
+            }
+
+            using (HashAlgorithm alg = SHA1.Create())
+            {
+                using (var fileStream = File.Create(filePath))
                 {
-                    var bytesRead = await networkStream.ReadAsync(buffer, 0, readSize);
-                    if (bytesRead == 0)
-                        break;
+                    do
+                    {
+                        var bytesRead = await networkStream.ReadAsync(buffer, 0, readSize);
+                        if (bytesRead == 0)
+                        {
+                            break;
+                        }
 
-                    await fileStream.WriteAsync(buffer, 0, bytesRead);
+                        alg.TransformBlock(buffer, 0, bytesRead, null, 0);
 
-                    bytesLeft -= bytesRead;
-                    readSize = (int) Math.Min(bytesLeft, chunkSize);
-                } while (bytesLeft > 0);
+                        await fileStream.WriteAsync(buffer, 0, bytesRead);
 
-                await fileStream.FlushAsync();
-                fileStream.Close();
+                        bytesLeft -= bytesRead;
+                        readSize = (int) Math.Min(bytesLeft, chunkSize);
+                    } while (bytesLeft > 0);
+
+                    await fileStream.FlushAsync();
+
+                    fileStream.Close();
+
+                    alg.TransformFinalBlock(buffer, 0, 0);
+
+                    return alg.Hash.ToHashString();
+                }
             }
         }
 

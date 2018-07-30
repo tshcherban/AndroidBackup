@@ -12,6 +12,9 @@ namespace FileSync.Common
 {
     internal sealed class TwoWaySyncClientImpl : ISyncClient
     {
+        private const string FileListToRemove = "toremove.txt";
+        private const string FileListToAddorUpdate = "newfiles.txt";
+
         private readonly string _serverAddress;
         private readonly int _serverPort;
         private readonly string _baseDir;
@@ -73,7 +76,7 @@ namespace FileSync.Common
                             var filePath = Path.Combine(_baseDir, fileInfo.RelativePath);
                             var movedFilePath = filePath + "._sr";
                             File.Move(filePath, movedFilePath);
-                            var path = Path.Combine(_baseDir, "toremove.txt");
+                            var path = Path.Combine(_syncDbDir, FileListToRemove);
                             File.AppendAllText(path, $"{movedFilePath}{filePath}");
                         }
 
@@ -83,15 +86,20 @@ namespace FileSync.Common
                         }
 
                         if (!await ReceiveFiles(networkStream, syncList.Data.ToDownload))
+                        {
                             return;
+                        }
 
                         if (!await SendFiles(networkStream, syncList.Data.ToUpload))
+                        {
                             return;
+                        }
 
                         var response = await FinishSession(networkStream, _sessionId);
                         if (response.HasError)
                         {
                             Log?.Invoke($"Error finishing session. Server response was '{response.ErrorMsg}'");
+
                             return;
                         }
 
@@ -111,7 +119,7 @@ namespace FileSync.Common
 
         private void FinishLocalSession()
         {
-            var filesToRemove = Path.Combine(_syncDbDir, "toremove.txt");
+            var filesToRemove = Path.Combine(_syncDbDir, FileListToRemove);
             if (File.Exists(filesToRemove))
             {
                 var removeLines = File.ReadAllLines(filesToRemove);
@@ -121,12 +129,14 @@ namespace FileSync.Common
                 }
 
                 for (var i = 0; i < removeLines.Length - 1; i += 2)
+                {
                     File.Delete(removeLines[i]);
+                }
 
                 File.Delete(filesToRemove);
             }
 
-            var newFiles = Path.Combine(_syncDbDir, "newfiles.txt");
+            var newFiles = Path.Combine(_syncDbDir, FileListToAddorUpdate);
             if (File.Exists(newFiles))
             {
                 var newLines = File.ReadAllLines(newFiles);
@@ -137,7 +147,13 @@ namespace FileSync.Common
 
                 for (var i = 0; i < newLines.Length - 1; i += 3)
                 {
-                    File.Move(newLines[i], newLines[i + 1]);
+                    var destinationFile = newLines[i + 1];
+                    if (File.Exists(destinationFile))
+                    {
+                        File.Delete(destinationFile);
+                    }
+
+                    File.Move(newLines[i], destinationFile);
                 }
 
                 File.Delete(newFiles);
@@ -229,9 +245,9 @@ namespace FileSync.Common
 
                 var tmpFilePath = Path.Combine(_baseDir, fileInfo.RelativePath)+"._sn";
                 var filePath = Path.Combine(_baseDir, fileInfo.RelativePath);
-                await NetworkHelper.ReadToFile(networkStream, tmpFilePath, fileLength);
+                var newHash = await NetworkHelper.ReadToFile(networkStream, tmpFilePath, fileLength);
 
-                var newFiles = Path.Combine(_syncDbDir, "newfiles.txt");
+                var newFiles = Path.Combine(_syncDbDir, FileListToAddorUpdate);
                 File.AppendAllText(newFiles, $"{tmpFilePath}\r\n{filePath}\r\n\r\n");
             }
 
