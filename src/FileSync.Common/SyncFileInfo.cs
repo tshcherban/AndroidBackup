@@ -9,10 +9,15 @@ namespace FileSync.Common
     public sealed class SyncFileInfo
     {
         private string _absolutePath;
+        private string _relativePath;
 
         public string HashStr { get; set; }
 
-        public string RelativePath { get; set; }
+        public string RelativePath
+        {
+            get => _relativePath;
+            set => _relativePath = value?.Replace("\\", null);
+        }
 
         [JsonIgnore]
         public string AbsolutePath

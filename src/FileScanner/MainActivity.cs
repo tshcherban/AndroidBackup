@@ -64,14 +64,15 @@ namespace FileSync.Android
             var cn = StopService(i);
         }
 
-        private void BtnOnClick(object sender, EventArgs e)
+        private async void BtnOnClick(object sender, EventArgs e)
         {
-            var client = SyncClientFactory.GetTwoWay("192.168.2.3", 9211, @"/storage/emulated/0/stest/", @"/storage/emulated/0/stest/.sync");
+            //var client = SyncClientFactory.GetTwoWay("192.168.2.3", 9211, @"/storage/emulated/0/stest/", @"/storage/emulated/0/stest/.sync");
+            var client = SyncClientFactory.GetTwoWay("192.168.137.1", 9211, @"/storage/emulated/0/stest/", @"/storage/emulated/0/stest/.sync");
             client.Log += s => RunOnUiThread(() =>
             {
                 _text.Text = $"{s}\r\n{_text.Text}";
             });
-            client.Sync().Wait();
+            await client.Sync();
 
             return;
             var i = new Intent(this, typeof(DemoService));

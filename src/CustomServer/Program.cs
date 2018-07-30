@@ -69,7 +69,7 @@ namespace FileSync.Server
         {
             await Task.Yield();
 
-            using (var clientHandler = new TwoWaySyncClientHandler(tcpClient))
+            using (var clientHandler = new TwoWaySyncClientHandler(tcpClient, @"C:\shcherban\stest"))
             {
                 await clientHandler.Process();
             }
@@ -91,6 +91,13 @@ namespace FileSync.Server
             while (Console.ReadKey().Key != ConsoleKey.Enter) ;
 
             program._stop = true;
+
+            if (program._connections.Count > 0)
+            {
+                Console.WriteLine("Waiting for clients to complete...");
+
+                Task.WaitAll(program._connections.ToArray(), TimeSpan.FromSeconds(30));
+            }
         }
 
         private static void WriteLine(string obj)

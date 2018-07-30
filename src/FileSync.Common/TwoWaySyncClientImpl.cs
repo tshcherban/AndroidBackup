@@ -70,10 +70,11 @@ namespace FileSync.Common
 
                         foreach (var fileInfo in syncList.Data.ToRemove)
                         {
-                            var filePath = $"{_baseDir}{fileInfo.RelativePath}";
+                            var filePath = Path.Combine(_baseDir, fileInfo.RelativePath);
                             var movedFilePath = filePath + "._sr";
                             File.Move(filePath, movedFilePath);
-                            File.AppendAllText($"{_baseDir}\\toremove.txt", $"{movedFilePath}{filePath}");
+                            var path = Path.Combine(_baseDir, "toremove.txt");
+                            File.AppendAllText(path, $"{movedFilePath}{filePath}");
                         }
 
                         if (syncList.Data.Conflicts.Count > 0)
@@ -110,12 +111,14 @@ namespace FileSync.Common
 
         private void FinishLocalSession()
         {
-            var filesToRemove = $"{_syncDbDir}\\toremove.txt";
+            var filesToRemove = Path.Combine(_syncDbDir, "toremove.txt");
             if (File.Exists(filesToRemove))
             {
                 var removeLines = File.ReadAllLines(filesToRemove);
                 if (removeLines.Length % 2 != 0)
+                {
                     throw new InvalidOperationException("Service file structure corrupt");
+                }
 
                 for (var i = 0; i < removeLines.Length - 1; i += 2)
                     File.Delete(removeLines[i]);
@@ -123,15 +126,19 @@ namespace FileSync.Common
                 File.Delete(filesToRemove);
             }
 
-            var newFiles = $"{_syncDbDir}\\newfiles.txt";
+            var newFiles = Path.Combine(_syncDbDir, "newfiles.txt");
             if (File.Exists(newFiles))
             {
                 var newLines = File.ReadAllLines(newFiles);
-                if (newLines.Length % 2 != 0)
+                if (newLines.Length % 3 != 0)
+                {
                     throw new InvalidOperationException("Service file structure corrupt");
+                }
 
-                for (var i = 0; i < newLines.Length - 1; i += 2)
+                for (var i = 0; i < newLines.Length - 1; i += 3)
+                {
                     File.Move(newLines[i], newLines[i + 1]);
+                }
 
                 File.Delete(newFiles);
             }
@@ -178,7 +185,7 @@ namespace FileSync.Common
         {
             foreach (var fileInfo in dataToUpload)
             {
-                var filePath = $"{_baseDir}{fileInfo.RelativePath}";
+                var filePath = Path.Combine(_baseDir, fileInfo.RelativePath);
                 var fileLength = new FileInfo(filePath).Length;
 
                 var data = new SendFileCommandData
@@ -220,11 +227,12 @@ namespace FileSync.Common
                 var fileLengthBytes = await NetworkHelper.ReadBytes(networkStream, cmdHeader.PayloadLength);
                 var fileLength = BitConverter.ToInt64(fileLengthBytes, 0);
 
-                var tmpFilePath = $"{_baseDir}{fileInfo.RelativePath}._sn";
-                var filePath = $"{_baseDir}{fileInfo.RelativePath}";
+                var tmpFilePath = Path.Combine(_baseDir, fileInfo.RelativePath)+"._sn";
+                var filePath = Path.Combine(_baseDir, fileInfo.RelativePath);
                 await NetworkHelper.ReadToFile(networkStream, tmpFilePath, fileLength);
 
-                File.AppendAllText($"{_syncDbDir}\\newfiles.txt", $"{tmpFilePath}\r\n{filePath}\r\n\r\n");
+                var newFiles = Path.Combine(_syncDbDir, "newfiles.txt");
+                File.AppendAllText(newFiles, $"{tmpFilePath}\r\n{filePath}\r\n\r\n");
             }
 
             return true;
@@ -282,7 +290,8 @@ namespace FileSync.Common
 
             foreach (var stored in syncDb.Files)
             {
-                var localFileIdx = localFiles.IndexOf($"{_baseDir}{stored.RelativePath}");
+                var localFilePath = Path.Combine(_baseDir, stored.RelativePath);
+                var localFileIdx = localFiles.IndexOf(localFilePath);
                 if (localFileIdx < 0)
                 {
                     stored.State = SyncFileState.Deleted;

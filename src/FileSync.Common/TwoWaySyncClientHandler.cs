@@ -11,12 +11,14 @@ namespace FileSync.Common
     public sealed class TwoWaySyncClientHandler : IDisposable
     {
         private readonly TcpClient _tcpClient;
+        private readonly string _rootFolder;
         private NetworkStream _networkStream;
         private bool _connected;
 
-        public TwoWaySyncClientHandler(TcpClient tcpClient)
+        public TwoWaySyncClientHandler(TcpClient tcpClient, string folder)
         {
             _tcpClient = tcpClient;
+            _rootFolder = folder;
         }
 
         public async Task Process()
@@ -82,7 +84,7 @@ namespace FileSync.Common
             try
             {
                 var session = SessionStorage.Instance.GetNewSession();
-                session.BaseDir = @"G:\SyncTest\Dst"; // TODO get from config/client/etc
+                session.BaseDir = _rootFolder;
                 session.SyncDbDir = Path.Combine(session.BaseDir, ".sync");
                 if (!Directory.Exists(session.SyncDbDir))
                 {
@@ -141,7 +143,7 @@ namespace FileSync.Common
 
         private void FinishSession(Session session)
         {
-            var filesToRemove = $"{session.SyncDbDir}\\toremove.txt";
+            var filesToRemove = Path.Combine(session.SyncDbDir, "toremove.txt");
             if (File.Exists(filesToRemove))
             {
                 var removeLines = File.ReadAllLines(filesToRemove);
@@ -154,7 +156,7 @@ namespace FileSync.Common
                 File.Delete(filesToRemove);
             }
 
-            var newFiles = $"{session.SyncDbDir}\\newfiles.txt";
+            var newFiles = Path.Combine(session.SyncDbDir, "newfiles.txt");
             if (File.Exists(newFiles))
             {
                 var newLines = File.ReadAllLines(newFiles);
@@ -187,13 +189,14 @@ namespace FileSync.Common
             }
             else
             {
-                var filePath = $"{session.BaseDir}{data.RelativeFilePath}";
+                var filePath = Path.Combine(session.BaseDir, data.RelativeFilePath);
                 var filePathTemp = filePath+"._sn";
                 while (File.Exists(filePathTemp))
                     filePathTemp += "._sn";
                 await NetworkHelper.ReadToFile(_networkStream, filePathTemp, data.FileLength);
 
-                File.AppendAllText($"{session.SyncDbDir}\\newfiles.txt", $"{filePathTemp}\r\n{filePath}\r\n");
+                var path = Path.Combine(session.SyncDbDir, "newfiles.txt");
+                File.AppendAllText(path, $"{filePathTemp}\r\n{filePath}\r\n");
             }
         }
 
@@ -216,7 +219,7 @@ namespace FileSync.Common
             }
             else
             {
-                var filePath = $"{session.BaseDir}{data.RelativeFilePath}";
+                var filePath = Path.Combine(session.BaseDir, data.RelativeFilePath);
                 var fileLength = new FileInfo(filePath).Length;
                 var fileLengthBytes = BitConverter.GetBytes(fileLength);
                 await NetworkHelper.WriteCommandHeader(_networkStream, Commands.GetFileCmd, sizeof(long));
@@ -271,13 +274,14 @@ namespace FileSync.Common
                                 case SyncFileState.Deleted:
                                     if (localFileInfo.State == SyncFileState.NotChanged || localFileInfo.State == SyncFileState.Deleted)
                                     {
-                                        var filePath = $"{session.BaseDir}{localFileInfo.RelativePath}";
+                                        var filePath = Path.Combine(session.BaseDir, localFileInfo.RelativePath);
                                         var movedFilePath = filePath + "._sr";
                                         while (File.Exists(movedFilePath))
                                             movedFilePath += "._sr";
 
                                         File.Move(filePath, movedFilePath);
-                                        File.AppendAllText($"{session.BaseDir}\\toremove.txt", $"{movedFilePath}\r\n{filePath}\r\n");
+                                        var path = Path.Combine(session.BaseDir, "toremove.txt");
+                                        File.AppendAllText(path, $"{movedFilePath}\r\n{filePath}\r\n");
                                     }
                                     else if (localFileInfo.State == SyncFileState.New)
                                         syncInfo.ToDownload.Add(localFileInfo);
@@ -355,7 +359,8 @@ namespace FileSync.Common
 
             foreach (var stored in syncDb.Files)
             {
-                var localFileIdx = localFiles.IndexOf($"{baseDir}{stored.RelativePath}");
+                var localFilePath = Path.Combine(baseDir, stored.RelativePath);
+                var localFileIdx = localFiles.IndexOf(localFilePath);
                 if (localFileIdx < 0)
                 {
                     stored.State = SyncFileState.Deleted;
