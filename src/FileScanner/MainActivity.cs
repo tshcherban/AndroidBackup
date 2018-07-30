@@ -7,6 +7,7 @@ using Android.OS;
 using Android.Text.Method;
 using Android.Util;
 using Android.Views;
+using FileSync.Common;
 
 namespace FileSync.Android
 {
@@ -65,6 +66,14 @@ namespace FileSync.Android
 
         private void BtnOnClick(object sender, EventArgs e)
         {
+            var client = SyncClientFactory.GetTwoWay("192.168.2.3", 9211, @"/storage/emulated/0/stest/", @"/storage/emulated/0/stest/.sync");
+            client.Log += s => RunOnUiThread(() =>
+            {
+                _text.Text = $"{s}\r\n{_text.Text}";
+            });
+            client.Sync().Wait();
+
+            return;
             var i = new Intent(this, typeof(DemoService));
             i.PutExtra("data", DateTime.Now.ToString("G"));
             var cn = StartService(i);
