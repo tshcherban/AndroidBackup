@@ -1,4 +1,8 @@
 ﻿using System;
+using System.Diagnostics;
+using System.IO;
+using System.Linq;
+using System.Security.Cryptography;
 using System.Threading.Tasks;
 using Android;
 using Android.App;
@@ -47,7 +51,73 @@ namespace FileSync.Android
             var btn2 = FindViewById<Button>(Resource.Id.button2);
             btn2.Click += Btn2OnClick;
 
-            Communicator.Ev += CommunicatorOnEv;
+            var btn3 = FindViewById<Button>(Resource.Id.button3);
+            btn3.Click += Btn3OnClick;
+
+            Task.Run(() => Action());
+        }
+
+        private void Action()
+        {
+            Task.Delay(2000).Wait();
+
+            TestAlgos();
+        }
+
+        private async void Btn3OnClick(object sender, EventArgs e)
+        {
+            var res = await TryGetpermissionsAsync();
+            if (!res)
+            {
+                return;
+            }
+
+            TestAlgos();
+        }
+
+        private void TestAlgos()
+        {
+            var ms = 112000000;
+
+            var ff = Directory.GetFiles("/storage/emulated/0/");
+            var fs1 = ff.Select(x => new FileInfo(x))
+                    .OrderByDescending(x => x.Length)
+                    .Where(x => x.Length > ms)
+                    .ToList();
+            var fs =fs1[0];
+
+            if (fs == null)
+            {
+                return;
+            }
+
+            var fname = fs.FullName;
+
+            TestHash(new MurmurHash3UnsafeProvider(), fs);
+        }
+
+        private void TestHash(HashAlgorithm alg, FileInfo fname, int bsize = 4096)
+        {
+            var sw = Stopwatch.StartNew();
+
+            using (alg)
+            {
+                using (var file = new FileStream(fname.FullName, FileMode.Open, FileAccess.Read, FileShare.ReadWrite, bsize))
+                {
+                    var hash = alg.ComputeHash(file);
+
+                    var hh = hash.ToHashString();
+
+                    if (hh == null)
+                    {
+                        throw new InvalidOperationException();
+                    }
+                }
+            }
+
+            sw.Stop();
+
+            System.Diagnostics.Debug.WriteLine($"************** {alg.GetType().Name} {sw.Elapsed.TotalMilliseconds:F2} ms (buffer - {bsize} bytes, speed - {(fname.Length/1024m/1024m)/(decimal)sw.Elapsed.TotalSeconds:F2} mb/s)");
         }
 
         private void CommunicatorOnEv(string s)
@@ -95,7 +165,8 @@ namespace FileSync.Android
             return await Task.WhenAny(task, Task.Delay(timeout)) == task;
         }
 
-        public override void OnRequestPermissionsResult(int requestCode, string[] permissions, Permission[] grantResults)
+        public override void OnRequestPermissionsResult(int requestCode, string[] permissions,
+            Permission[] grantResults)
         {
             base.OnRequestPermissionsResult(requestCode, permissions, grantResults);
 
@@ -128,6 +199,27 @@ namespace FileSync.Android
             var i = new Intent(this, typeof(DemoService));
             i.PutExtra("data", DateTime.Now.ToString("G"));
             var cn = StartService(i);
+        }
+
+        private  static uint To32BitFnv1aHash(byte[] bytes)
+        {
+            var hash = FnvConstants.FnvOffset32;
+
+            foreach (var chunk in bytes)
+            {
+                hash ^= chunk;
+                hash *= FnvConstants.FnvPrime32;
+            }
+
+            return hash;
+        }
+
+        public static class FnvConstants
+        {
+            public static readonly uint FnvPrime32 = 16777619;
+            public static readonly ulong FnvPrime64 = 1099511628211;
+            public static readonly uint FnvOffset32 = 2166136261;
+            public static readonly ulong FnvOffset64 = 14695981039346656037;
         }
     }
 

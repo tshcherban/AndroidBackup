@@ -39,7 +39,7 @@ namespace FileSync.Common
     {
         public static string ToHashString(this byte[] array)
         {
-            return string.Concat(array.Select(i => i.ToString("x")));
+            return string.Concat(array.Select(i => i.ToString("x2")));
         }
     }
 

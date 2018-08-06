@@ -401,14 +401,14 @@ namespace FileSync.Common
                 {
                     var localFile = localFiles[localFileIdx];
                     localFiles.RemoveAt(localFileIdx);
-                    using (HashAlgorithm alg = SHA1.Create())
+                    using (HashAlgorithm alg = new MurmurHash3UnsafeProvider())
                     {
                         using (var localFileStream = File.OpenRead(localFile))
                         {
                             alg.ComputeHash(localFileStream);
                         }
 
-                        string localFileHash = alg.Hash.ToHashString();
+                        var localFileHash = alg.Hash.ToHashString();
                         if (localFileHash != stored.HashStr)
                         {
                             stored.State = SyncFileState.Modified;
