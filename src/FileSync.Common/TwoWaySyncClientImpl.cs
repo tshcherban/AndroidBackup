@@ -261,7 +261,7 @@ namespace FileSync.Common
 
                 if (!string.Equals(newHash, fileInfo.HashStr, StringComparison.OrdinalIgnoreCase))
                 {
-                    throw new InvalidOperationException("File copy error");
+                    throw new InvalidOperationException("File copy error: hash mismatch");
                 }
 
                 File.AppendAllText(newFilesList, $"{tmpFilePath}\r\n{filePath}\r\n\r\n");

@@ -408,8 +408,12 @@ namespace FileSync.Common
                             alg.ComputeHash(localFileStream);
                         }
 
-                        if (alg.Hash.ToHashString() != stored.HashStr)
+                        string localFileHash = alg.Hash.ToHashString();
+                        if (localFileHash != stored.HashStr)
+                        {
                             stored.State = SyncFileState.Modified;
+                            stored.HashStr = localFileHash;
+                        }
                     }
                 }
             }
