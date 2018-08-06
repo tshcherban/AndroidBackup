@@ -9,6 +9,8 @@ namespace FileSync.Common
 {
     public static class NetworkHelper
     {
+        const int chunkSize = 1 * 1024 * 1024;
+
         public static async Task<CommandHeader> ReadCommandHeader(Stream stream, CancellationToken? token = null)
         {
             var commandHeaderBytes = await ReadBytes(stream, Commands.PreambleLength + Commands.CommandLength, token);
@@ -72,7 +74,7 @@ namespace FileSync.Common
 
         public static async Task<string> ReadToFile(Stream networkStream, string filePath, long fileLength)
         {
-            const int chunkSize = 16 * 1024 * 1024;
+            
 
             var readSize = (int) Math.Min(fileLength, chunkSize);
             var buffer = new byte[readSize];
@@ -135,8 +137,6 @@ namespace FileSync.Common
 
         public static async Task WriteFromFile(NetworkStream networkStream, string filePath)
         {
-            const int chunkSize = 16 * 1024 * 1024;
-
             using (var fileStream = File.OpenRead(filePath))
             {
                 var readSize = (int) Math.Min(fileStream.Length, chunkSize);

@@ -7,7 +7,7 @@
     android:minHeight="25px">
     <TextView
         android:layout_width="match_parent"
-        android:layout_height="300dp"
+        android:layout_height="375dp"
         android:id="@+id/editText1"
         android:verticalScrollbarPosition="right"
         android:scrollbars="vertical" />

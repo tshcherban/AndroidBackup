@@ -45,19 +45,25 @@ namespace FileSync.Common
             var localInfos = localFiles.Select(i =>
             {
                 if (inside && i.StartsWith(syncDbDir))
+                {
                     return null;
-                HashAlgorithm alg = SHA1.Create();
-                using (var fileStream = File.OpenRead(i))
-                {
-                    alg.ComputeHash(fileStream);
                 }
-                return new SyncFileInfo
+
+                using (HashAlgorithm alg = new MurmurHash3UnsafeProvider())
                 {
-                    HashStr = alg.Hash.ToHashString(),
-                    RelativePath = i.Replace(baseDir, string.Empty),
-                    AbsolutePath = i,
-                    State = SyncFileState.New,
-                };
+                    using (var fileStream = File.OpenRead(i))
+                    {
+                        alg.ComputeHash(fileStream);
+                    }
+
+                    return new SyncFileInfo
+                    {
+                        HashStr = alg.Hash.ToHashString(),
+                        RelativePath = i.Replace(baseDir, string.Empty),
+                        AbsolutePath = i,
+                        State = SyncFileState.New,
+                    };
+                }
             }).Where(i => i != null).ToList();
 
             return new SyncDatabase

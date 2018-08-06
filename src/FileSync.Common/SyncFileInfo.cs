@@ -2,6 +2,7 @@
 using System.Diagnostics;
 using System.Linq;
 using Newtonsoft.Json;
+using Newtonsoft.Json.Converters;
 
 namespace FileSync.Common
 {
@@ -32,6 +33,7 @@ namespace FileSync.Common
             set => _absolutePath = value;
         }
 
+        [JsonConverter(typeof(StringEnumConverter))]
         public SyncFileState State { get; set; }
     }
 

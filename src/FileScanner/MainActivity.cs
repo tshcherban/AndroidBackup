@@ -2,7 +2,11 @@
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Net;
+using System.Net.Sockets;
 using System.Security.Cryptography;
+using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 using Android;
 using Android.App;
@@ -20,7 +24,17 @@ namespace FileSync.Android
     [Activity(Label = "FileScanner", MainLauncher = true)]
     public class MainActivity : Activity
     {
+        private const int PermissionsTimeout = 10000;
+
+        private readonly string[] _permissions =
+        {
+            Manifest.Permission.ReadExternalStorage,
+            Manifest.Permission.WriteExternalStorage,
+        };
+
         private TextView _text;
+
+        private Task<IPEndPoint> _discoverTask;
 
         public MainActivity()
         {
@@ -54,15 +68,44 @@ namespace FileSync.Android
             var btn3 = FindViewById<Button>(Resource.Id.button3);
             btn3.Click += Btn3OnClick;
 
-            Task.Run(() => Action());
+            Task.Run(async () => { await Action(); });
         }
 
-        private void Action()
+        private async Task Action()
         {
-            Task.Delay(2000).Wait();
+            await Task.Delay(2000);
 
-            TestAlgos();
+            await CLientDiscover();
+            //TestAlgos();
         }
+
+        private async Task CLientDiscover()
+        {
+            var cts = new TaskCompletionSource<IPEndPoint>();
+            _discoverTask = cts.Task;
+
+            using (var client = new UdpClient())
+            {
+                var requestData = Encoding.ASCII.GetBytes("SomeRequestData");
+
+                client.EnableBroadcast = true;
+                await client.SendAsync(requestData, requestData.Length, new IPEndPoint(IPAddress.Broadcast, 8888));
+
+                var serverResponseData = await client.ReceiveAsync();
+                var serverResponse = Encoding.ASCII.GetString(serverResponseData.Buffer);
+
+                var port = int.Parse(serverResponse.Replace("port:", null));
+
+                var ss = $"Recived {serverResponse} from {serverResponseData.RemoteEndPoint.Address}";
+
+                AppendLog(ss);
+
+                cts.SetResult(new IPEndPoint(serverResponseData.RemoteEndPoint.Address, port));
+
+                client.Close();
+            }
+        }
+
 
         private async void Btn3OnClick(object sender, EventArgs e)
         {
@@ -75,16 +118,23 @@ namespace FileSync.Android
             TestAlgos();
         }
 
-        private void TestAlgos()
+        private async void TestAlgos()
         {
-            var ms = 112000000;
+            var res = await TryGetpermissionsAsync();
+            if (!res)
+            {
+                return;
+            }
+
+            const int minSize = 112000000;
 
             var ff = Directory.GetFiles("/storage/emulated/0/");
             var fs1 = ff.Select(x => new FileInfo(x))
-                    .OrderByDescending(x => x.Length)
-                    .Where(x => x.Length > ms)
-                    .ToList();
-            var fs =fs1[0];
+                .OrderByDescending(x => x.Length)
+                .Where(x => x.Length > minSize)
+                .ToList();
+
+            var fs = fs1[0];
 
             if (fs == null)
             {
@@ -102,7 +152,8 @@ namespace FileSync.Android
 
             using (alg)
             {
-                using (var file = new FileStream(fname.FullName, FileMode.Open, FileAccess.Read, FileShare.ReadWrite, bsize))
+                using (var file = new FileStream(fname.FullName, FileMode.Open, FileAccess.Read, FileShare.ReadWrite,
+                    bsize))
                 {
                     var hash = alg.ComputeHash(file);
 
@@ -117,12 +168,18 @@ namespace FileSync.Android
 
             sw.Stop();
 
-            System.Diagnostics.Debug.WriteLine($"************** {alg.GetType().Name} {sw.Elapsed.TotalMilliseconds:F2} ms (buffer - {bsize} bytes, speed - {(fname.Length/1024m/1024m)/(decimal)sw.Elapsed.TotalSeconds:F2} mb/s)");
+            System.Diagnostics.Debug.WriteLine(
+                $"************** {alg.GetType().Name} {sw.Elapsed.TotalMilliseconds:F2} ms (buffer - {bsize} bytes, speed - {(fname.Length / 1024m / 1024m) / (decimal) sw.Elapsed.TotalSeconds:F2} mb/s)");
         }
 
         private void CommunicatorOnEv(string s)
         {
-            RunOnUiThread(() => { _text.Text = $"{s}\r\n{_text.Text}"; });
+            AppendLog(s);
+        }
+
+        private void AppendLog(string msg)
+        {
+            RunOnUiThread(() => { _text.Text = $"{msg}\r\n{_text.Text}"; });
         }
 
         private void Btn2OnClick(object sender, EventArgs e)
@@ -133,15 +190,10 @@ namespace FileSync.Android
             var cn = StopService(i);
         }
 
-        readonly string[] Permissions =
-        {
-            Manifest.Permission.ReadExternalStorage,
-            Manifest.Permission.WriteExternalStorage,
-        };
 
         private const int RequestId = 1;
 
-        TaskCompletionSource<bool> _tcs;
+        private TaskCompletionSource<bool> _requestPermissionsTaskCompletionSource;
 
         private async Task<bool> TryGetpermissionsAsync()
         {
@@ -150,29 +202,32 @@ namespace FileSync.Android
                 return false;
             }
 
-            if (CheckSelfPermission(Permissions[0]) == (int) Permission.Granted)
+            if (CheckSelfPermission(_permissions[0]) == (int) Permission.Granted)
             {
                 return true;
             }
 
-            _tcs = new TaskCompletionSource<bool>();
+            _requestPermissionsTaskCompletionSource = new TaskCompletionSource<bool>();
 
-            Task.Run(() => { RequestPermissions(Permissions, RequestId); });
+            var requestTask = Task.Run(() => { RequestPermissions(_permissions, RequestId); });
 
-            const int timeout = 10000;
-            var task = _tcs.Task;
+            var requestPermissionsTask = _requestPermissionsTaskCompletionSource.Task;
 
-            return await Task.WhenAny(task, Task.Delay(timeout)) == task;
+            var timedOut = await Task.WhenAny(requestPermissionsTask, Task.Delay(PermissionsTimeout)) ==
+                           requestPermissionsTask;
+
+            await requestTask;
+
+            return timedOut;
         }
 
-        public override void OnRequestPermissionsResult(int requestCode, string[] permissions,
-            Permission[] grantResults)
+        public override void OnRequestPermissionsResult(int requestCode, string[] permissions, Permission[] grantResults)
         {
             base.OnRequestPermissionsResult(requestCode, permissions, grantResults);
 
             if (requestCode == RequestId)
             {
-                _tcs.SetResult(grantResults[0] == Permission.Granted);
+                _requestPermissionsTaskCompletionSource.SetResult(grantResults[0] == Permission.Granted);
             }
         }
 
@@ -186,13 +241,21 @@ namespace FileSync.Android
                 return;
             }
 
-            Toast.MakeText(this, "Storage permission allowed. Starting sync...", ToastLength.Short).Show();
+            AppendLog("Storage permission allowed. Waiting fow service discovery");
 
-            var client = SyncClientFactory.GetTwoWay("192.168.2.6", 9211, @"/mnt/sdcard", @"/mnt/sdcard/.sync");
-            //var client = SyncClientFactory.GetTwoWay("192.168.2.6", 9211, @"/storage/emulated/0/stest/", @"/storage/emulated/0/stest/.sync");
-            //var client = SyncClientFactory.GetTwoWay("192.168.2.3", 9211, @"/storage/emulated/0/stest/", @"/storage/emulated/0/stest/.sync");
-            //var client = SyncClientFactory.GetTwoWay("192.168.137.1", 9211, @"/storage/emulated/0/stest/", @"/storage/emulated/0/stest/.sync");
-            client.Log += s => RunOnUiThread(() => { _text.Text = $"{s}\r\n{_text.Text}"; });
+            var endpoint = await _discoverTask;
+
+            AppendLog($"Discovered on {endpoint}. Starting sync...");
+
+            //const string dir = @"/mnt/sdcard";
+            const string dir = @"/storage/emulated/0/stest/";
+
+            var dbDir = Path.Combine(dir, @".sync/");
+
+            var client = SyncClientFactory.GetTwoWay(endpoint.Address.ToString(), endpoint.Port, dir, dbDir);
+
+            client.Log += AppendLog;
+
             await client.Sync();
 
             return;
@@ -201,7 +264,7 @@ namespace FileSync.Android
             var cn = StartService(i);
         }
 
-        private  static uint To32BitFnv1aHash(byte[] bytes)
+        private static uint To32BitFnv1aHash(byte[] bytes)
         {
             var hash = FnvConstants.FnvOffset32;
 

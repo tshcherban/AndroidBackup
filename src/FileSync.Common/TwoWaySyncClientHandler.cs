@@ -15,6 +15,8 @@ namespace FileSync.Common
         private NetworkStream _networkStream;
         private bool _connected;
 
+        public event Action<string> Msg;
+
         public TwoWaySyncClientHandler(TcpClient tcpClient, string folder)
         {
             _tcpClient = tcpClient;
@@ -210,12 +212,21 @@ namespace FileSync.Common
             {
                 var filePath = Path.Combine(session.BaseDir, data.RelativeFilePath);
                 var filePathTemp = filePath + "._sn";
+
                 while (File.Exists(filePathTemp))
                 {
                     filePathTemp += "._sn";
                 }
 
+                Msg?.Invoke($"Receiving file '{data.RelativeFilePath}'");
+
+                var sw = Stopwatch.StartNew();
+
                 var newHash = await NetworkHelper.ReadToFile(_networkStream, filePathTemp, data.FileLength);
+
+                sw.Stop();
+
+                Msg?.Invoke($"Received file in {sw.Elapsed.TotalSeconds:F2} ({data.FileLength/1024m/1024m/(decimal)sw.Elapsed.TotalSeconds:F2} mib/s)");
 
                 var fileInfo = session.SyncDb.Files.FirstOrDefault(i => i.RelativePath == data.RelativeFilePath);
                 if (fileInfo != null)
