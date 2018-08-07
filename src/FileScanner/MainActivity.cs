@@ -96,7 +96,7 @@ namespace FileSync.Android
 
                 var port = int.Parse(serverResponse.Replace("port:", null));
 
-                var ss = $"Recived {serverResponse} from {serverResponseData.RemoteEndPoint.Address}";
+                var ss = $"Discovered on {serverResponseData.RemoteEndPoint.Address}:{port}";
 
                 AppendLog(ss);
 
@@ -241,6 +241,13 @@ namespace FileSync.Android
                 return;
             }
 
+            if (_discoverTask == null)
+            {
+                Toast.MakeText(this, "Wait for service discovery", ToastLength.Short).Show();
+
+                return;
+            }
+
             AppendLog("Storage permission allowed. Waiting fow service discovery");
 
             var endpoint = await _discoverTask;
@@ -248,7 +255,9 @@ namespace FileSync.Android
             AppendLog($"Discovered on {endpoint}. Starting sync...");
 
             //const string dir = @"/mnt/sdcard";
-            const string dir = @"/storage/emulated/0/stest/";
+            //const string dir = @"/storage/emulated/0/stest/";
+            //const string dir = @"/storage/emulated/0/music/";
+            const string dir = @"/storage/emulated/0/DCIM/";
 
             var dbDir = Path.Combine(dir, @".sync/");
 

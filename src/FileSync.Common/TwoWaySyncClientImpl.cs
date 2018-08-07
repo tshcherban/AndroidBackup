@@ -255,7 +255,7 @@ namespace FileSync.Common
                 var fileLengthBytes = await NetworkHelper.ReadBytes(networkStream, cmdHeader.PayloadLength);
                 var fileLength = BitConverter.ToInt64(fileLengthBytes, 0);
 
-                var tmpFilePath = Path.Combine(_baseDir, fileInfo.RelativePath)+"._sn";
+                var tmpFilePath = Path.Combine(_baseDir, fileInfo.RelativePath) + "._sn";
                 var filePath = Path.Combine(_baseDir, fileInfo.RelativePath);
                 var newHash = await NetworkHelper.ReadToFile(networkStream, tmpFilePath, fileLength);
 
@@ -332,7 +332,7 @@ namespace FileSync.Common
                 {
                     var localFile = localFiles[localFileIdx];
                     localFiles.RemoveAt(localFileIdx);
-                    using (HashAlgorithm alg = SHA1.Create())
+                    using (HashAlgorithm alg = new MurmurHash3UnsafeProvider())
                     {
                         using (var fileStream = File.OpenRead(localFile))
                         {
@@ -340,7 +340,9 @@ namespace FileSync.Common
                         }
 
                         if (alg.Hash.ToHashString() != stored.HashStr)
+                        {
                             stored.State = SyncFileState.Modified;
+                        }
                     }
                 }
             }
@@ -348,11 +350,13 @@ namespace FileSync.Common
             var localInfos = localFiles.Select(localFile =>
             {
                 if (dbDirInBase && localFile.StartsWith(_syncDbDir))
+                {
                     return null;
+                }
 
                 var localFileRelativePath = localFile.Replace(_baseDir, string.Empty);
 
-                using (HashAlgorithm alg = SHA1.Create())
+                using (HashAlgorithm alg = new MurmurHash3UnsafeProvider())
                 {
                     alg.ComputeHash(File.OpenRead(localFile));
 

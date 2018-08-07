@@ -42,7 +42,7 @@ namespace FileSync.Common
             var localFiles = Directory.GetFiles(session.BaseDir, "*", SearchOption.AllDirectories);
             var localInfos = localFiles.Select(i =>
             {
-                using (HashAlgorithm alg = SHA1.Create())
+                using (HashAlgorithm alg = new MurmurHash3UnsafeProvider())
                 using (var inputStream = File.OpenRead(i))
                 {
                     alg.ComputeHash(inputStream);

@@ -356,11 +356,6 @@ namespace FileSync.Common
 
                     foreach (var remoteFileInfo in data.Files)
                     {
-                        if (remoteFileInfo.State != SyncFileState.New)
-                        {
-                            Debugger.Break(); // should not be happened
-                        }
-
                         syncInfo.ToUpload.Add(remoteFileInfo);
                     }
 
@@ -436,7 +431,7 @@ namespace FileSync.Common
 
                 var localFileRelativePath = localFile.Replace(baseDir, string.Empty);
 
-                using (HashAlgorithm alg = SHA1.Create())
+                using (HashAlgorithm alg = new MurmurHash3UnsafeProvider())
                 {
                     alg.ComputeHash(File.OpenRead(localFile));
 

@@ -57,17 +57,19 @@ namespace FileSync.Common
 
         public static async Task<byte[]> ReadBytes(Stream stream, int count, CancellationToken? token = null)
         {
-            var bytesRead = 0;
             var buffer = new byte[count];
-            var bytesLeft = count;
+            var totalRead = 0;
             do
             {
-                bytesRead = await stream.ReadAsync(buffer, bytesRead, bytesLeft, token ?? CancellationToken.None);
+                var bytesRead = await stream.ReadAsync(buffer, totalRead, count, token ?? CancellationToken.None);
                 if (bytesRead == 0)
+                {
                     break;
+                }
 
-                bytesLeft -= bytesRead;
-            } while (bytesLeft > 0);
+                count -= bytesRead;
+                totalRead += bytesRead;
+            } while (count > 0);
 
             return buffer;
         }
@@ -98,13 +100,13 @@ namespace FileSync.Common
                     fileStream.Close();
                 }
 
-                using (HashAlgorithm alg = SHA1.Create())
+                using (HashAlgorithm alg = new MurmurHash3UnsafeProvider())
                 {
                     return alg.ComputeHash(buffer).ToHashString();
                 }
             }
 
-            using (HashAlgorithm alg = SHA1.Create())
+            using (HashAlgorithm alg = new MurmurHash3UnsafeProvider())
             {
                 using (var fileStream = File.Create(filePath))
                 {
