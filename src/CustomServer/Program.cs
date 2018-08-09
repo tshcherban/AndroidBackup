@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.IO;
 using System.Net;
 using System.Net.Sockets;
 using System.Text;
@@ -21,6 +22,23 @@ namespace FileSync.Server
         // The core server task
         private Task StartListener()
         {
+            Task.Run(async () =>
+            {
+                var tcpListener = TcpListener.Create(Port+1);
+                tcpListener.Start();
+                while (!_stop)
+                {
+                    var tcpClient = await tcpListener.AcceptTcpClientAsync();
+                    Console.WriteLine($"Client1 has connected {tcpClient.Client.RemoteEndPoint}");
+                    var task = StartHandleConnectionAsync1(tcpClient);
+                    // if already faulted, re-throw any error on the calling context
+                    if (task.IsFaulted)
+                    {
+                        task.Wait();
+                    }
+                }
+            });
+
             return Task.Run(async () =>
             {
                 var tcpListener = TcpListener.Create(Port);
@@ -37,6 +55,20 @@ namespace FileSync.Server
                     }
                 }
             });
+        }
+
+        private async Task StartHandleConnectionAsync1(TcpClient tcpClient)
+        {
+            using (NetworkStream ns = tcpClient.GetStream())
+            {
+                var fname = @"C:\shcherban\stest\file";
+                if (File.Exists(fname))
+                {
+                    File.Delete(fname);
+                }
+
+                await NetworkHelper.ReadToFile(ns, fname, 131880010);
+            }
         }
 
         // Register and handle the connection
@@ -79,8 +111,8 @@ namespace FileSync.Server
         {
             await Task.Yield();
 
-            //const string path = @"C:\shcherban\stest";
-            const string path = @"H:\SyncTest\Dst";
+            const string path = @"C:\shcherban\stest";
+            //const string path = @"H:\SyncTest\Dst";
 
             using (var clientHandler = new TwoWaySyncClientHandler(tcpClient, path))
             {
