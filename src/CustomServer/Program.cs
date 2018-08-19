@@ -80,7 +80,8 @@ namespace FileSync.Server
             await Task.Yield();
 
             //const string path = @"C:\shcherban\stest";
-            const string path = @"H:\SyncTest\Dst";
+            //const string path = @"H:\SyncTest\Dst";
+            const string path = @"D:\taras\stest";
 
             using (var clientHandler = new TwoWaySyncClientHandler(tcpClient, path))
             {
@@ -129,12 +130,19 @@ namespace FileSync.Server
 
                 while (!_stop)
                 {
-                    var clientRequestData = await server.ReceiveAsync();// (ref clientEp);
-                    var clientRequest = Encoding.ASCII.GetString(clientRequestData.Buffer);
+                    try
+                    {
+                        var clientRequestData = await server.ReceiveAsync();// (ref clientEp);
+                        var clientRequest = Encoding.ASCII.GetString(clientRequestData.Buffer);
 
-                    Console.WriteLine("Recived {0} from {1}, sending response", clientRequest, clientRequestData.RemoteEndPoint.Address);
-                    await server.SendAsync(responseData, responseData.Length, clientRequestData.RemoteEndPoint);
-                    break;
+                        Console.WriteLine("Request from {0}, sending discover response", clientRequestData.RemoteEndPoint.Address);
+                        await server.SendAsync(responseData, responseData.Length, clientRequestData.RemoteEndPoint);
+
+                    }
+                    catch (Exception e)
+                    {
+                        Console.WriteLine($"Failed on discovery: {e}");
+                    }
                 }
             }
         }

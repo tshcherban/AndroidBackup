@@ -255,9 +255,9 @@ namespace FileSync.Android
             AppendLog($"Discovered on {endpoint}. Starting sync...");
 
             //const string dir = @"/mnt/sdcard";
-            //const string dir = @"/storage/emulated/0/stest/";
+            const string dir = @"/storage/emulated/0/stest/";
             //const string dir = @"/storage/emulated/0/music/";
-            const string dir = @"/storage/emulated/0/DCIM/";
+            //const string dir = @"/storage/emulated/0/DCIM/";
 
             var dbDir = Path.Combine(dir, @".sync/");
 
