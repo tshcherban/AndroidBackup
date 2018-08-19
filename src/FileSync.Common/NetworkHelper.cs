@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Diagnostics;
 using System.IO;
 using System.Net.Sockets;
 using System.Security.Cryptography;
@@ -76,7 +77,7 @@ namespace FileSync.Common
 
         public static async Task<string> ReadToFile(Stream networkStream, string filePath, long fileLength)
         {
-            
+            string log = null;
 
             var readSize = (int) Math.Min(fileLength, chunkSize);
             var buffer = new byte[readSize];
@@ -110,20 +111,41 @@ namespace FileSync.Common
             {
                 using (var fileStream = File.Create(filePath))
                 {
+                    var sw = Stopwatch.StartNew();
+
                     do
                     {
+                        var networkReadStart = sw.Elapsed.TotalMilliseconds;
+
                         var bytesRead = await networkStream.ReadAsync(buffer, 0, readSize);
                         if (bytesRead == 0)
                         {
                             break;
                         }
 
+                        var networkReadEnd = sw.Elapsed.TotalMilliseconds;
+                        var hashStart = networkReadEnd;
+
                         alg.TransformBlock(buffer, 0, bytesRead, null, 0);
+
+                        var hashEnd = sw.Elapsed.TotalMilliseconds;
+                        var fileWriteStart = hashEnd;
 
                         await fileStream.WriteAsync(buffer, 0, bytesRead);
 
+                        var fileWriteEnd = sw.Elapsed.TotalMilliseconds;
+
                         bytesLeft -= bytesRead;
                         readSize = (int) Math.Min(bytesLeft, chunkSize);
+
+                        log += $"{networkReadStart:F2}\t1\t0\t0\r\n";
+                        log += $"{networkReadEnd:F2}\t0\t0\t0\r\n";
+
+                        log += $"{hashStart:F2}\t0\t1\t0\r\n";
+                        log += $"{hashEnd:F2}\t0\t0\t0\r\n";
+
+                        log += $"{fileWriteStart:F2}\t0\t0\t1\r\n";
+                        log += $"{fileWriteEnd:F2}\t0\t0\t0\r\n";
                     } while (bytesLeft > 0);
 
                     await fileStream.FlushAsync();
@@ -132,7 +154,8 @@ namespace FileSync.Common
 
                     alg.TransformFinalBlock(buffer, 0, 0);
 
-                    return alg.Hash.ToHashString();
+                    //return alg.Hash.ToHashString();
+                    return log;
                 }
             }
         }

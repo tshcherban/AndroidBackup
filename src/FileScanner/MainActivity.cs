@@ -120,12 +120,6 @@ namespace FileSync.Android
 
         private async void TestAlgos()
         {
-            var res = await TryGetpermissionsAsync();
-            if (!res)
-            {
-                return;
-            }
-
             const int minSize = 112000000;
 
             var ff = Directory.GetFiles("/storage/emulated/0/");
@@ -141,9 +135,19 @@ namespace FileSync.Android
                 return;
             }
 
-            var fname = fs.FullName;
+            var fname = "/storage/emulated/0/ghh.mp4";
 
-            TestHash(new MurmurHash3UnsafeProvider(), fs);
+            using (var client = new TcpClient())
+            {
+                await client.ConnectAsync(_discoverTask.Result.Address, _discoverTask.Result.Port + 1);
+
+                using (var networkStream = client.GetStream())
+                {
+                    await NetworkHelper.WriteFromFile(networkStream, fname);
+                }
+            }
+
+            //TestHash(new MurmurHash3UnsafeProvider(), fs);
         }
 
         private void TestHash(HashAlgorithm alg, FileInfo fname, int bsize = 4096)
@@ -152,8 +156,7 @@ namespace FileSync.Android
 
             using (alg)
             {
-                using (var file = new FileStream(fname.FullName, FileMode.Open, FileAccess.Read, FileShare.ReadWrite,
-                    bsize))
+                using (var file = new FileStream(fname.FullName, FileMode.Open, FileAccess.Read, FileShare.ReadWrite, bsize))
                 {
                     var hash = alg.ComputeHash(file);
 
@@ -168,8 +171,7 @@ namespace FileSync.Android
 
             sw.Stop();
 
-            System.Diagnostics.Debug.WriteLine(
-                $"************** {alg.GetType().Name} {sw.Elapsed.TotalMilliseconds:F2} ms (buffer - {bsize} bytes, speed - {(fname.Length / 1024m / 1024m) / (decimal) sw.Elapsed.TotalSeconds:F2} mb/s)");
+            System.Diagnostics.Debug.WriteLine($"************** {alg.GetType().Name} {sw.Elapsed.TotalMilliseconds:F2} ms (buffer - {bsize} bytes, speed - {(fname.Length / 1024m / 1024m) / (decimal) sw.Elapsed.TotalSeconds:F2} mb/s)");
         }
 
         private void CommunicatorOnEv(string s)
