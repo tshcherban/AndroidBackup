@@ -31,5 +31,11 @@ namespace FileSync.Common
         public FileSession FileTransferSession { get; set; }
 
         public SyncDatabase SyncDb { get; set; }
+
+        public string SessionRootDir { get; internal set; }
+
+        public string RemovedDir { get; internal set; }
+
+        public string NewDir { get; internal set; }
     }
 }

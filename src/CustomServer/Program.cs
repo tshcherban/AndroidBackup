@@ -158,7 +158,7 @@ namespace FileSync.Server
         {
             using (var server = new UdpClient(8888))
             {
-                var responseData = Encoding.ASCII.GetBytes($"port:{Port}");
+                var responseData = Encoding.ASCII.GetBytes($"port: {Port}");
 
                 while (!_stop)
                 {

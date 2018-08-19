@@ -109,7 +109,16 @@ namespace FileSync.Common
 
             using (HashAlgorithm alg = new MurmurHash3UnsafeProvider())
             {
-                using (var fileStream = File.Create(filePath))
+                //const FileOptions fileFlagNoBuffering = (FileOptions)0x20000000;
+                //const FileOptions fileOptions = fileFlagNoBuffering | FileOptions.SequentialScan;
+
+                const int chunkSize = 1 * 1024 * 1024;
+
+                var readBufferSize = chunkSize;
+                readBufferSize += ((readBufferSize + 1023) & ~1023) - readBufferSize;
+
+                using (var fileStream = new FileStream(filePath, FileMode.CreateNew, FileAccess.Write, FileShare.None, readBufferSize, FileOptions.WriteThrough))
+                //using (var fileStream = File.Create(filePath))
                 {
                     var sw = Stopwatch.StartNew();
 
@@ -154,8 +163,8 @@ namespace FileSync.Common
 
                     alg.TransformFinalBlock(buffer, 0, 0);
 
-                    //return alg.Hash.ToHashString();
-                    return log;
+                    return alg.Hash.ToHashString();
+                    //return log;
                 }
             }
         }

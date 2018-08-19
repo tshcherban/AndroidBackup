@@ -97,6 +97,24 @@ namespace FileSync.Common
                     dirInfo.Attributes = dirInfo.Attributes | FileAttributes.Hidden;
                 }
 
+                var sessionDir = string.Empty;
+                var i = 1;
+                do
+                {
+                    sessionDir = Path.Combine(session.SyncDbDir, $"s{i}");
+                    ++i;
+                } while (Directory.Exists(sessionDir));
+
+                Directory.CreateDirectory(sessionDir);
+
+                session.SessionRootDir = sessionDir;
+
+                session.RemovedDir = Path.Combine(session.SessionRootDir, "rem");
+                Directory.CreateDirectory(session.RemovedDir);
+
+                session.NewDir = Path.Combine(session.SessionRootDir, "new");
+                Directory.CreateDirectory(session.NewDir);
+
                 response.Data = session.Id;
             }
             catch (Exception e)
@@ -150,44 +168,28 @@ namespace FileSync.Common
 
         private void FinishSession(Session session)
         {
-            var filesToRemove = Path.Combine(session.SyncDbDir, "toremove.txt");
-            if (File.Exists(filesToRemove))
+            var filesToRemove = Directory.GetFiles(session.RemovedDir, "*", SearchOption.AllDirectories);
+            foreach (var f in filesToRemove)
             {
-                var removeLines = File.ReadAllLines(filesToRemove);
-                if (removeLines.Length % 2 != 0)
+                File.Delete(f);
+                var ff = f.Replace(session.RemovedDir, null);
+                var fl = session.SyncDb.Files.FirstOrDefault(x => x.RelativePath.EndsWith(ff));
+                if (fl != null)
                 {
-                    throw new InvalidOperationException("Service file structure corrupt");
+                    session.SyncDb.Files.Remove(fl);
                 }
-
-                for (var i = 0; i < removeLines.Length - 1; i += 2)
-                {
-                    File.Delete(removeLines[i]);
-
-                    var fileInfo = session.SyncDb.Files.FirstOrDefault(j => j.AbsolutePath == removeLines[i]);
-                    if (fileInfo != null)
-                    {
-                        session.SyncDb.Files.Remove(fileInfo);
-                    }
-                }
-
-                File.Delete(filesToRemove);
             }
 
-            var newFiles = Path.Combine(session.SyncDbDir, "newfiles.txt");
-            if (File.Exists(newFiles))
+            var newFiles = Directory.GetFiles(session.NewDir, "*", SearchOption.AllDirectories);
+            foreach (var f in newFiles)
             {
-                var newLines = File.ReadAllLines(newFiles);
-                if (newLines.Length % 2 != 0)
+                var target = f.Replace(session.NewDir, session.BaseDir);
+                if (File.Exists(target))
                 {
-                    throw new InvalidOperationException("Service file structure corrupt");
+                    File.Delete(target);
                 }
 
-                for (var i = 0; i < newLines.Length - 1; i += 2)
-                {
-                    File.Move(newLines[i], newLines[i + 1]);
-                }
-
-                File.Delete(newFiles);
+                File.Move(f, target);
             }
         }
 
@@ -210,32 +212,23 @@ namespace FileSync.Common
             }
             else
             {
-                var filePath = Path.Combine(session.BaseDir, data.RelativeFilePath);
-                var filePathTemp = filePath + "._sn";
-
-                while (File.Exists(filePathTemp))
-                {
-                    filePathTemp += "._sn";
-                }
+                var filePath = Path.Combine(session.NewDir, data.RelativeFilePath);
 
                 Msg?.Invoke($"Receiving file '{data.RelativeFilePath}'");
 
                 var sw = Stopwatch.StartNew();
 
-                var newHash = await NetworkHelper.ReadToFile(_networkStream, filePathTemp, data.FileLength);
-
+                var newHash = await NetworkHelper.ReadToFile(_networkStream, filePath, data.FileLength);
+                4
                 sw.Stop();
 
-                Msg?.Invoke($"Received file in {sw.Elapsed.TotalSeconds:F2} ({data.FileLength/1024m/1024m/(decimal)sw.Elapsed.TotalSeconds:F2} mib/s)");
+                Msg?.Invoke($"Received file in {sw.Elapsed.TotalSeconds:F2} ({data.FileLength / 1024m / 1024m / (decimal)sw.Elapsed.TotalSeconds:F2} mib/s)");
 
                 var fileInfo = session.SyncDb.Files.FirstOrDefault(i => i.RelativePath == data.RelativeFilePath);
                 if (fileInfo != null)
                 {
                     fileInfo.HashStr = newHash;
                 }
-
-                var path = Path.Combine(session.SyncDbDir, "newfiles.txt");
-                File.AppendAllText(path, $"{filePathTemp}\r\n{filePath}\r\n");
             }
         }
 
@@ -316,18 +309,26 @@ namespace FileSync.Common
                                         localFileInfo.State == SyncFileState.Deleted)
                                     {
                                         var filePath = Path.Combine(session.BaseDir, localFileInfo.RelativePath);
-                                        var movedFilePath = filePath + "._sr";
-                                        while (File.Exists(movedFilePath))
-                                            movedFilePath += "._sr";
+                                        if (File.Exists(filePath))
+                                        {
+                                            var movedFilePath = Path.Combine(session.RemovedDir, localFileInfo.RelativePath);
+                                            var movedFileDir = Path.GetDirectoryName(movedFilePath);
+                                            if (!Directory.Exists(movedFileDir))
+                                            {
+                                                Directory.CreateDirectory(movedFileDir);
+                                            }
 
-                                        File.Move(filePath, movedFilePath);
-                                        var path = Path.Combine(session.BaseDir, "toremove.txt");
-                                        File.AppendAllText(path, $"{movedFilePath}\r\n{filePath}\r\n");
+                                            File.Move(filePath, movedFilePath);
+                                        }
                                     }
                                     else if (localFileInfo.State == SyncFileState.New)
+                                    {
                                         syncInfo.ToDownload.Add(localFileInfo);
+                                    }
                                     else
+                                    {
                                         syncInfo.Conflicts.Add(localFileInfo);
+                                    }
 
                                     break;
                                 case SyncFileState.New:
@@ -335,9 +336,13 @@ namespace FileSync.Common
                                     break;
                                 case SyncFileState.Modified:
                                     if (localFileInfo.State == SyncFileState.NotChanged)
+                                    {
                                         syncInfo.ToUpload.Add(localFileInfo);
+                                    }
                                     else
+                                    {
                                         syncInfo.Conflicts.Add(remoteFileInfo);
+                                    }
                                     break;
                                 case SyncFileState.NotChanged:
                                     if (localFileInfo.State == SyncFileState.Modified)
