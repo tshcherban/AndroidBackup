@@ -51,7 +51,8 @@ namespace FileSync.Common
 
         private unsafe void ComputeHashImpl(byte[] buffer, int offset, int count)
         {
-            var nblocks = count / 16;
+            //var nblocks = count / 16;
+            var nblocks = count;
 
             _totalCount += (ulong) count;
 
@@ -63,8 +64,10 @@ namespace FileSync.Common
                 ulong k1;
                 ulong k2;
 
-                for (var i = 0; i < nblocks; i++)
+                for (var i = 0; i < count + 1; i++)
                 {
+                    //k1 = body[i * 2];
+                    //k2 = body[i * 2 + 1];
                     k1 = body[i * 2];
                     k2 = body[i * 2 + 1];
 

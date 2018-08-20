@@ -84,5 +84,16 @@ namespace FileSync.Common
 
             File.WriteAllText(path, JsonConvert.SerializeObject(this, Formatting.Indented));
         }
+
+        internal void AddFile(string baseDir, string relativeFilePath, string hash)
+        {
+            Files.Add(new SyncFileInfo
+            {
+                HashStr = hash,
+                RelativePath = relativeFilePath,
+                AbsolutePath = Path.Combine(baseDir, relativeFilePath),
+                State = SyncFileState.NotChanged,
+            });
+        }
     }
 }

@@ -136,6 +136,7 @@ namespace FileSync.Android
                 return;
             }
 
+            fs = new FileInfo("/storage/emulated/0/stest/ghh.mp4");
             var fname = "/storage/emulated/0/stest/ghh.mp4";
 
             fs = new FileInfo(fname);
@@ -245,7 +246,10 @@ namespace FileSync.Android
 
         private void AppendLog(string msg)
         {
-            RunOnUiThread(() => { _text.Text = $"{msg}\r\n{_text.Text}"; });
+            Task.Run(() =>
+            {
+                RunOnUiThread(() => { _text.Text = $"{msg}\r\n{_text.Text}"; });
+            });            
         }
 
         private void Btn2OnClick(object sender, EventArgs e)
@@ -322,9 +326,9 @@ namespace FileSync.Android
             AppendLog($"Discovered on {endpoint}. Starting sync...");
 
             //const string dir = @"/mnt/sdcard";
-            //const string dir = @"/storage/emulated/0/stest/";
+            const string dir = @"/storage/emulated/0/stest/";
             //const string dir = @"/storage/emulated/0/music/";
-            const string dir = @"/storage/emulated/0/DCIM/";
+            //const string dir = @"/storage/emulated/0/DCIM/";
 
             var dbDir = Path.Combine(dir, @".sync/");
 
