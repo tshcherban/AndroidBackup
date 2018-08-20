@@ -18,6 +18,7 @@ using Android.Text.Method;
 using Android.Util;
 using Android.Views;
 using FileSync.Common;
+using Java.Util.Zip;
 
 namespace FileSync.Android
 {
@@ -68,10 +69,10 @@ namespace FileSync.Android
             var btn3 = FindViewById<Button>(Resource.Id.button3);
             btn3.Click += Btn3OnClick;
 
-            Task.Run(async () => { await Action(); });
+            Task.Run(async () => { await ClientDiscoverDelay(); });
         }
 
-        private async Task Action()
+        private async Task ClientDiscoverDelay()
         {
             await Task.Delay(2000);
 
@@ -115,10 +116,10 @@ namespace FileSync.Android
                 return;
             }
 
-            TestAlgos();
+            await TestAlgos();
         }
 
-        private async void TestAlgos()
+        private async Task TestAlgos()
         {
             const int minSize = 112000000;
 
@@ -135,9 +136,11 @@ namespace FileSync.Android
                 return;
             }
 
-            var fname = "/storage/emulated/0/ghh.mp4";
+            var fname = "/storage/emulated/0/stest/ghh.mp4";
 
-            using (var client = new TcpClient())
+            fs = new FileInfo(fname);
+
+            /*using (var client = new TcpClient())
             {
                 await client.ConnectAsync(_discoverTask.Result.Address, _discoverTask.Result.Port + 1);
 
@@ -145,9 +148,69 @@ namespace FileSync.Android
                 {
                     await NetworkHelper.WriteFromFile(networkStream, fname);
                 }
-            }
+            }*/
 
-            //TestHash(new MurmurHash3UnsafeProvider(), fs);
+
+            /*var h1 = TestHash(new MD5CryptoServiceProvider(), fs.FullName, (int) fs.Length, 1024 * 1024);
+            var h2 = TestHash(MD5.Create(), fs.FullName, (int) fs.Length, 1024 * 1024);
+            var h3 = TestHash(new MD5CryptoServiceProvider(), fs.FullName, (int) fs.Length, 133202);
+            var h4 = TestHash(MD5.Create(), fs.FullName, (int) fs.Length, 133202);*/
+
+            //var h1 = await TestHash(MD5.Create(), fs.FullName, (int) fs.Length, BufferSizeMib * 1024 * 1024);
+            var h1 = await TestHash(xxHash64Algo.Create(), fs.FullName, (int) fs.Length, BufferSizeMib * 1024 * 1024);
+            var h2 = await TestHash(xxHash64Algo.Create(), fs.FullName, (int) fs.Length, 133202);
+
+            System.Diagnostics.Debug.WriteLine($"*****RESULT***** {h1 == h2}");
+
+            h1 = await TestHash(XxHash64.Create(), fs.FullName, (int) fs.Length, BufferSizeMib * 1024 * 1024);
+            h2 = await TestHash(XxHash64.Create(), fs.FullName, (int) fs.Length, 133202);
+
+            System.Diagnostics.Debug.WriteLine($"*****RESULT***** {h1 == h2}");
+
+            //TestHash(new MD5CryptoServiceProvider(), fs);
+            //TestHash(XxHash64.Create(), fs);
+            //TestHash(FileSync.Android.xh.XXHash64.Create(), fs);
+        }
+
+        private const int BufferSizeMib = 1;
+
+        private static async Task<string> TestHash(HashAlgorithm alg, string fname, int length, int chunkSize)
+        {
+            var sw = Stopwatch.StartNew();
+
+            using (alg)
+            {
+                using (var fileStream = File.OpenRead(fname))
+                {
+                    var readSize = Math.Min(length, chunkSize);
+                    var buffer = new byte[readSize];
+                    var bytesLeft = length;
+
+                    do
+                    {
+                        var bytesRead = await fileStream.ReadAsync(buffer, 0, readSize);
+                        if (bytesRead == 0)
+                        {
+                            break;
+                        }
+
+                        alg.TransformBlock(buffer, 0, bytesRead, null, 0);
+
+                        bytesLeft -= bytesRead;
+                        readSize = (int) Math.Min(bytesLeft, chunkSize);
+                    } while (bytesLeft > 0);
+
+                    fileStream.Close();
+
+                    alg.TransformFinalBlock(buffer, 0, 0);
+
+                    sw.Stop();
+
+                    System.Diagnostics.Debug.WriteLine($"***** {alg.GetType().Name} {sw.Elapsed.TotalMilliseconds:F2} ms (buffer - {chunkSize/1024m:F2} kbytes, speed - {(length / 1024.0m / 1024.0m) / (decimal) sw.Elapsed.TotalSeconds:F2} mb/s)");
+
+                    return alg.Hash.ToHashString();
+                }
+            }
         }
 
         private void TestHash(HashAlgorithm alg, FileInfo fname, int bsize = 4096)
@@ -156,7 +219,8 @@ namespace FileSync.Android
 
             using (alg)
             {
-                using (var file = new FileStream(fname.FullName, FileMode.Open, FileAccess.Read, FileShare.ReadWrite, bsize))
+                using (var file = new FileStream(fname.FullName, FileMode.Open, FileAccess.Read, FileShare.ReadWrite,
+                    bsize))
                 {
                     var hash = alg.ComputeHash(file);
 
@@ -171,7 +235,7 @@ namespace FileSync.Android
 
             sw.Stop();
 
-            System.Diagnostics.Debug.WriteLine($"************** {alg.GetType().Name} {sw.Elapsed.TotalMilliseconds:F2} ms (buffer - {bsize} bytes, speed - {(fname.Length / 1024m / 1024m) / (decimal) sw.Elapsed.TotalSeconds:F2} mb/s)");
+            System.Diagnostics.Debug.WriteLine($"***** {alg.GetType().Name} {sw.Elapsed.TotalMilliseconds:F2} ms (buffer - {bsize} bytes, speed - {(fname.Length / 1024m / 1024m) / (decimal) sw.Elapsed.TotalSeconds:F2} mb/s)");
         }
 
         private void CommunicatorOnEv(string s)
@@ -223,7 +287,8 @@ namespace FileSync.Android
             return timedOut;
         }
 
-        public override void OnRequestPermissionsResult(int requestCode, string[] permissions, Permission[] grantResults)
+        public override void OnRequestPermissionsResult(int requestCode, string[] permissions,
+            Permission[] grantResults)
         {
             base.OnRequestPermissionsResult(requestCode, permissions, grantResults);
 

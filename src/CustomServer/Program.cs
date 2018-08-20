@@ -4,6 +4,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Net;
 using System.Net.Sockets;
+using System.Security.Cryptography;
 using System.Text;
 using System.Threading.Tasks;
 using FileSync.Common;
@@ -135,6 +136,36 @@ namespace FileSync.Server
                 return;
             }
 
+            var fs = new FileInfo(@"C:\shcherban\shcherban.7z");
+
+            //var h1 = TestHash(xxHash64Algo.Create(), fs.FullName, (int) fs.Length, BufferSizeMib * 1024 * 1024).Result;
+            //var h2 = TestHash(xxHash64Algo.Create(), fs.FullName, (int) fs.Length, 133202).Result;
+
+            var sww = Stopwatch.StartNew();
+            //using (var ff = fs.OpenRead())
+            const FileOptions fileFlagNoBuffering = (FileOptions)0x20000000;
+            const FileOptions fileOptions = fileFlagNoBuffering | FileOptions.SequentialScan;
+
+            const int chunkSize = BufferSizeMib * 1024 * 1024;
+
+            var readBufferSize = chunkSize;
+            readBufferSize += ((readBufferSize + 1023) & ~1023) - readBufferSize;
+
+            using (HashAlgorithm hashAlgorithm = SHA1.Create())
+            using (var ff = new FileStream(fs.FullName, FileMode.Open, FileAccess.Read, FileShare.Read, readBufferSize, fileOptions))
+            {
+                var hash2 = xxHash64New.ComputeHash(ff, BufferSizeMib*1024*1024);
+            }
+            sww.Stop();
+
+            Console.WriteLine($"***** {sww.Elapsed.TotalMilliseconds:F2} ms (speed - {(fs.Length / 1024.0m / 1024.0m) / (decimal) sww.Elapsed.TotalSeconds:F2} mb/s)");
+
+            //Console.WriteLine($"*****RESULT***** {h1 == h2}");
+
+            Console.ReadLine();
+
+            return;
+
             var program = new Program();
             program.StartListener();
             Console.WriteLine("Listening. Press return to quit");
@@ -150,6 +181,47 @@ namespace FileSync.Server
                 Console.WriteLine("Waiting for clients to complete...");
 
                 Task.WaitAll(program._connections.ToArray(), TimeSpan.FromSeconds(30));
+            }
+        }
+
+        private const int BufferSizeMib = 16;
+
+        private static async Task<string> TestHash(HashAlgorithm alg, string fname, int length, int chunkSize)
+        {
+            var sw = Stopwatch.StartNew();
+
+            using (alg)
+            {
+                using (var fileStream = File.OpenRead(fname))
+                {
+                    var readSize = Math.Min(length, chunkSize);
+                    var buffer = new byte[readSize];
+                    var bytesLeft = length;
+
+                    do
+                    {
+                        var bytesRead = await fileStream.ReadAsync(buffer, 0, readSize);
+                        if (bytesRead == 0)
+                        {
+                            break;
+                        }
+
+                        alg.TransformBlock(buffer, 0, bytesRead, null, 0);
+
+                        bytesLeft -= bytesRead;
+                        readSize = (int) Math.Min(bytesLeft, chunkSize);
+                    } while (bytesLeft > 0);
+
+                    fileStream.Close();
+
+                    alg.TransformFinalBlock(buffer, 0, 0);
+
+                    sw.Stop();
+
+                    Console.WriteLine($"***** {alg.GetType().Name} {sw.Elapsed.TotalMilliseconds:F2} ms (buffer - {chunkSize/1024m:F2} kbytes, speed - {(length / 1024.0m / 1024.0m) / (decimal) sw.Elapsed.TotalSeconds:F2} mb/s)");
+
+                    return alg.Hash.ToHashString();
+                }
             }
         }
 
