@@ -135,7 +135,10 @@ namespace FileSync.Android
                 return;
             }
 
-            var fname = "/storage/emulated/0/ghh.mp4";
+            fs = new FileInfo("/storage/emulated/0/stest/ghh.mp4");
+
+            /*
+            var fname = "/storage/emulated/0/stest/ghh.mp4";
 
             using (var client = new TcpClient())
             {
@@ -146,8 +149,9 @@ namespace FileSync.Android
                     await NetworkHelper.WriteFromFile(networkStream, fname);
                 }
             }
-
-            //TestHash(new MurmurHash3UnsafeProvider(), fs);
+            */
+            TestHash(new MurmurHash3UnsafeProvider(), fs);
+            //TestHash(MD5.Create(), fs);
         }
 
         private void TestHash(HashAlgorithm alg, FileInfo fname, int bsize = 4096)
@@ -181,7 +185,10 @@ namespace FileSync.Android
 
         private void AppendLog(string msg)
         {
-            RunOnUiThread(() => { _text.Text = $"{msg}\r\n{_text.Text}"; });
+            Task.Run(() =>
+            {
+                RunOnUiThread(() => { _text.Text = $"{msg}\r\n{_text.Text}"; });
+            });            
         }
 
         private void Btn2OnClick(object sender, EventArgs e)

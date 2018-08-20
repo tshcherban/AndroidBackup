@@ -4,6 +4,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Net;
 using System.Net.Sockets;
+using System.Security.Cryptography;
 using System.Text;
 using System.Threading.Tasks;
 using FileSync.Common;
@@ -24,7 +25,7 @@ namespace FileSync.Server
         {
             Task.Run(async () =>
             {
-                var tcpListener = TcpListener.Create(Port+1);
+                var tcpListener = TcpListener.Create(Port + 1);
                 tcpListener.Start();
                 while (!_stop)
                 {
@@ -135,6 +136,30 @@ namespace FileSync.Server
                 Console.ReadKey();
                 return;
             }
+
+            using (HashAlgorithm h = new MurmurHash3UnsafeProvider())
+            //using (HashAlgorithm h = SHA1.Create())
+            using (var f = File.OpenRead(@"D:\taras\stest\ghh.mp4"))
+            {
+                const int le = 133810;
+                var bf = new byte[le];
+                var left = f.Length;
+                for (; left > 0; )
+                {
+                    
+                    var toRead = (int)Math.Min(le, left);
+                    var read = f.Read(bf, 0, toRead);
+                    if (read == 0)
+                        throw null;
+
+                    left -= read;
+                    h.TransformBlock(bf, 0, read, null, -1);
+                }
+                var hh0 = h.TransformFinalBlock(bf, 0, 0).ToHashString();
+                var hh1 = h.Hash.ToHashString();
+            }
+
+            return;
 
             var program = new Program();
             program.StartListener();

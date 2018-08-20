@@ -74,11 +74,12 @@ namespace FileSync.Common
 
                     _connected = false;
 
-                    Console.WriteLine($"unexpected error:\r\n{e}");
+                    Console.WriteLine($"Unexpected error:\r\n{e}");
                 }
                 else
                 {
                     // client disconnected
+                    Console.WriteLine($"Unexpected error but client already disconnected, ingoring...");
                 }
             }
         }
@@ -156,7 +157,7 @@ namespace FileSync.Common
                     response.ErrorMsg = e.ToString();
                 }
 
-                session.SyncDb = SyncDatabase.Initialize(session.BaseDir, session.SyncDbDir);
+                //session.SyncDb = SyncDatabase.Initialize(session.BaseDir, session.SyncDbDir);
                 session.SyncDb.Store(session.SyncDbDir);
             }
 
@@ -172,8 +173,8 @@ namespace FileSync.Common
             foreach (var f in filesToRemove)
             {
                 File.Delete(f);
-                var ff = f.Replace(session.RemovedDir, null);
-                var fl = session.SyncDb.Files.FirstOrDefault(x => x.RelativePath.EndsWith(ff));
+                var ff = f.Replace(session.RemovedDir, null).TrimStart(Path.DirectorySeparatorChar);
+                var fl = session.SyncDb.Files.FirstOrDefault(x => x.RelativePath == ff);
                 if (fl != null)
                 {
                     session.SyncDb.Files.Remove(fl);
@@ -190,6 +191,9 @@ namespace FileSync.Common
                 }
 
                 File.Move(f, target);
+
+                var relative = f.Replace(session.NewDir, null).TrimStart(Path.DirectorySeparatorChar);
+                var fl = session.SyncDb.Files.FirstOrDefault(x => x.RelativePath == relative);
             }
         }
 
@@ -219,15 +223,19 @@ namespace FileSync.Common
                 var sw = Stopwatch.StartNew();
 
                 var newHash = await NetworkHelper.ReadToFile(_networkStream, filePath, data.FileLength);
-                4
+
                 sw.Stop();
 
-                Msg?.Invoke($"Received file in {sw.Elapsed.TotalSeconds:F2} ({data.FileLength / 1024m / 1024m / (decimal)sw.Elapsed.TotalSeconds:F2} mib/s)");
+                Msg?.Invoke($"Received file in {sw.Elapsed.TotalSeconds:F2} ({(decimal)data.FileLength / 1024.0m / 1024.0m / (decimal)sw.Elapsed.TotalSeconds:F2} mib/s)");
 
                 var fileInfo = session.SyncDb.Files.FirstOrDefault(i => i.RelativePath == data.RelativeFilePath);
                 if (fileInfo != null)
                 {
                     fileInfo.HashStr = newHash;
+                }
+                else
+                {
+                    session.SyncDb.AddFile(session.BaseDir, data.RelativeFilePath, newHash);
                 }
             }
         }
