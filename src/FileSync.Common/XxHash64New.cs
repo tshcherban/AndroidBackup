@@ -1,6 +1,6 @@
 ﻿namespace FileSync.Common
 {
-    public static partial class xxHash64New
+    public static partial class XxHash64New
     {
         private const ulong p1 = 11400714785074694791UL;
         private const ulong p2 = 14029467366897019727UL;

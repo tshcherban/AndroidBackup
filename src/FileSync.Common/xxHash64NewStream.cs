@@ -4,7 +4,7 @@ using System.Threading.Tasks;
 
 namespace FileSync.Common
 {
-    public static partial class xxHash64New
+    public static partial class XxHash64New
     {
         private const int Min64 = 1024;
         private const int Div32 = 0x7FFFFFE0;

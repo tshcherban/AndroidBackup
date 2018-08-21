@@ -116,30 +116,39 @@ namespace FileSync.Android
                 return;
             }
 
-            await TestAlgos();
+            var sww = Stopwatch.StartNew();
+            //using (var ff = fs.OpenRead())
+            const FileOptions fileFlagNoBuffering = (FileOptions)0x20000000;
+            const FileOptions fileOptions = fileFlagNoBuffering | FileOptions.SequentialScan;
+
+            const int chunkSize = BufferSizeMib * 1024 * 1024;
+
+            var readBufferSize = chunkSize;
+            readBufferSize += ((readBufferSize + 1023) & ~1023) - readBufferSize;
+
+            var fs = new FileInfo("/storage/emulated/0/stest/ghh.mp4");
+            //var fs = new FileInfo("/storage/emulated/0/shcherban.7z");
+
+            using (HashAlgorithm hashAlgorithm = SHA1.Create())
+            using (var ff = new FileStream(fs.FullName, FileMode.Open, FileAccess.Read, FileShare.Read, readBufferSize, fileOptions))
+            {
+                //var hash0 = XxHash64New.ComputeHash(ff, 72000);
+                //var hash1 = XxHash64New.ComputeHash(ff, 133220);
+                //var hash2 = XxHash64New.ComputeHash(ff, 4*1024*1024);
+                var hash3 = XxHash64New.ComputeHash(ff, 8192);
+            }
+            sww.Stop();
+
+            System.Diagnostics.Debug.WriteLine($"***** {sww.Elapsed.TotalMilliseconds:F2} ms (speed - {(fs.Length / 1024.0m / 1024.0m) / (decimal) sww.Elapsed.TotalSeconds:F2} mb/s)");
+
+
+            //await TestAlgos();
         }
 
         private async Task TestAlgos()
         {
-            const int minSize = 112000000;
-
-            var ff = Directory.GetFiles("/storage/emulated/0/");
-            var fs1 = ff.Select(x => new FileInfo(x))
-                .OrderByDescending(x => x.Length)
-                .Where(x => x.Length > minSize)
-                .ToList();
-
-            var fs = fs1[0];
-
-            if (fs == null)
-            {
-                return;
-            }
-
-            fs = new FileInfo("/storage/emulated/0/stest/ghh.mp4");
-            var fname = "/storage/emulated/0/stest/ghh.mp4";
-
-            fs = new FileInfo(fname);
+            var fname = "";
+            var fs = new FileInfo(fname);
 
             /*using (var client = new TcpClient())
             {
@@ -150,27 +159,6 @@ namespace FileSync.Android
                     await NetworkHelper.WriteFromFile(networkStream, fname);
                 }
             }*/
-
-
-            /*var h1 = TestHash(new MD5CryptoServiceProvider(), fs.FullName, (int) fs.Length, 1024 * 1024);
-            var h2 = TestHash(MD5.Create(), fs.FullName, (int) fs.Length, 1024 * 1024);
-            var h3 = TestHash(new MD5CryptoServiceProvider(), fs.FullName, (int) fs.Length, 133202);
-            var h4 = TestHash(MD5.Create(), fs.FullName, (int) fs.Length, 133202);*/
-
-            //var h1 = await TestHash(MD5.Create(), fs.FullName, (int) fs.Length, BufferSizeMib * 1024 * 1024);
-            var h1 = await TestHash(xxHash64Algo.Create(), fs.FullName, (int) fs.Length, BufferSizeMib * 1024 * 1024);
-            var h2 = await TestHash(xxHash64Algo.Create(), fs.FullName, (int) fs.Length, 133202);
-
-            System.Diagnostics.Debug.WriteLine($"*****RESULT***** {h1 == h2}");
-
-            h1 = await TestHash(XxHash64.Create(), fs.FullName, (int) fs.Length, BufferSizeMib * 1024 * 1024);
-            h2 = await TestHash(XxHash64.Create(), fs.FullName, (int) fs.Length, 133202);
-
-            System.Diagnostics.Debug.WriteLine($"*****RESULT***** {h1 == h2}");
-
-            //TestHash(new MD5CryptoServiceProvider(), fs);
-            //TestHash(XxHash64.Create(), fs);
-            //TestHash(FileSync.Android.xh.XXHash64.Create(), fs);
         }
 
         private const int BufferSizeMib = 1;

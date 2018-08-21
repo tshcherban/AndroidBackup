@@ -155,7 +155,7 @@ namespace FileSync.Server
             using (HashAlgorithm hashAlgorithm = SHA1.Create())
             using (var ff = new FileStream(fs.FullName, FileMode.Open, FileAccess.Read, FileShare.Read, readBufferSize, fileOptions))
             {
-                var hash2 = xxHash64New.ComputeHash(ff, BufferSizeMib*1024*1024);
+                var hash2 = XxHash64New.ComputeHash(ff, BufferSizeMib*1024*1024);
             }
             sww.Stop();
 
