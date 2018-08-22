@@ -139,6 +139,13 @@ namespace FileSync.Server
 
             var fs = new FileInfo(@"C:\shcherban\shcherban.7z");
 
+            /*var h1 = TestHash(xxHash64Algo.Create(), fs.FullName, (int) fs.Length, BufferSizeMib * 1024 * 1024).Result;
+            var h2 = TestHash(xxHash64Algo.Create(), fs.FullName, (int) fs.Length, 133202).Result;
+
+            Console.WriteLine($"*****RESULT***** {h1 == h2}");
+
+            return;*/
+
             //var h1 = TestHash(xxHash64Algo.Create(), fs.FullName, (int) fs.Length, BufferSizeMib * 1024 * 1024).Result;
             //var h2 = TestHash(xxHash64Algo.Create(), fs.FullName, (int) fs.Length, 133202).Result;
 
@@ -152,10 +159,12 @@ namespace FileSync.Server
             var readBufferSize = chunkSize;
             readBufferSize += ((readBufferSize + 1023) & ~1023) - readBufferSize;
 
-            using (HashAlgorithm hashAlgorithm = SHA1.Create())
-            using (var ff = new FileStream(fs.FullName, FileMode.Open, FileAccess.Read, FileShare.Read, readBufferSize, fileOptions))
+            using (var ff = new FileStream(fs.FullName, FileMode.Open, FileAccess.Read, FileShare.Read, readBufferSize))
             {
-                var hash2 = XxHash64New.ComputeHash(ff, BufferSizeMib*1024*1024);
+                //var hash1 = XxHash64Unsafe.ComputeHash(ff, 783);
+                var hash2 = XxHash64Unsafe.ComputeHash(ff, BufferSizeMib*1024*1024);
+
+                //Console.WriteLine(hash1 == hash2);
             }
             sww.Stop();
 
@@ -211,7 +220,7 @@ namespace FileSync.Server
             }
         }
 
-        private const int BufferSizeMib = 16;
+        private const int BufferSizeMib = 32;
 
         private static async Task<string> TestHash(HashAlgorithm alg, string fname, int length, int chunkSize)
         {

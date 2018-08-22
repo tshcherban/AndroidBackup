@@ -116,8 +116,10 @@ namespace FileSync.Android
                 return;
             }
 
+            //var fs = new FileInfo("/storage/emulated/0/stest/ghh.mp4");
+            var fs = new FileInfo("/storage/emulated/0/shcherban.7z");
+
             var sww = Stopwatch.StartNew();
-            //using (var ff = fs.OpenRead())
             const FileOptions fileFlagNoBuffering = (FileOptions)0x20000000;
             const FileOptions fileOptions = fileFlagNoBuffering | FileOptions.SequentialScan;
 
@@ -126,23 +128,36 @@ namespace FileSync.Android
             var readBufferSize = chunkSize;
             readBufferSize += ((readBufferSize + 1023) & ~1023) - readBufferSize;
 
-            var fs = new FileInfo("/storage/emulated/0/stest/ghh.mp4");
-            //var fs = new FileInfo("/storage/emulated/0/shcherban.7z");
+            ulong hash1, hash2;
 
-            using (HashAlgorithm hashAlgorithm = SHA1.Create())
             using (var ff = new FileStream(fs.FullName, FileMode.Open, FileAccess.Read, FileShare.Read, readBufferSize, fileOptions))
             {
-                //var hash0 = XxHash64New.ComputeHash(ff, 72000);
-                //var hash1 = XxHash64New.ComputeHash(ff, 133220);
-                //var hash2 = XxHash64New.ComputeHash(ff, 4*1024*1024);
-                var hash3 = XxHash64New.ComputeHash(ff, 8192);
+                hash1 = XxHash64Unsafe.ComputeHash(ff, 133219);
             }
             sww.Stop();
 
-            System.Diagnostics.Debug.WriteLine($"***** {sww.Elapsed.TotalMilliseconds:F2} ms (speed - {(fs.Length / 1024.0m / 1024.0m) / (decimal) sww.Elapsed.TotalSeconds:F2} mb/s)");
+            var speed1 = fs.Length / 1024d / 1024d / sww.Elapsed.TotalSeconds;
+            
+            AppendLog($"{speed1:F2} mb/s ({133219/1024d:F2} kb)");
 
+            sww = Stopwatch.StartNew();
 
-            //await TestAlgos();
+            using (var ff = new FileStream(fs.FullName, FileMode.Open, FileAccess.Read, FileShare.Read, readBufferSize, fileOptions))
+            {
+                hash2 = XxHash64Unsafe.ComputeHash(ff, BufferSizeMib * 1024 * 1024);
+            }
+
+            sww.Stop();
+
+            var speed2 = fs.Length / 1024d / 1024d / sww.Elapsed.TotalSeconds;
+
+            AppendLog($"{speed2:F2} mb/s ({BufferSizeMib*1024d:F2} kb)");
+
+            //await TestHash(xxHash64Algo.Create(), fs.FullName, (int) fs.Length, BufferSizeMib*1024*1024);
+            //var h1 = await TestHash(xxHash64Algo.Create(), fs.FullName, (int) fs.Length, 124959);
+            //var h2 = await TestHash(xxHash64Algo.Create(), fs.FullName, (int) fs.Length, BufferSizeMib*1024*1024);
+
+            AppendLog($"hashes equals {hash1 == hash2}");
         }
 
         private async Task TestAlgos()
@@ -163,7 +178,7 @@ namespace FileSync.Android
 
         private const int BufferSizeMib = 1;
 
-        private static async Task<string> TestHash(HashAlgorithm alg, string fname, int length, int chunkSize)
+        private async Task<string> TestHash(HashAlgorithm alg, string fname, int length, int chunkSize)
         {
             var sw = Stopwatch.StartNew();
 
@@ -195,7 +210,15 @@ namespace FileSync.Android
 
                     sw.Stop();
 
-                    System.Diagnostics.Debug.WriteLine($"***** {alg.GetType().Name} {sw.Elapsed.TotalMilliseconds:F2} ms (buffer - {chunkSize/1024m:F2} kbytes, speed - {(length / 1024.0m / 1024.0m) / (decimal) sw.Elapsed.TotalSeconds:F2} mb/s)");
+                    var speed = length / 1024d / 1024d / sw.Elapsed.TotalSeconds;
+
+                    var log = $"{speed:F2} mb/s ({chunkSize/1024d:F2} kb)";
+
+                    Toast.MakeText(this, log, ToastLength.Short).Show();
+                    
+                    AppendLog(log);
+
+                    //System.Diagnostics.Debug.WriteLine($"***** {alg.GetType().Name} {sw.Elapsed.TotalMilliseconds:F2} ms (buffer - {chunkSize/1024m:F2} kbytes, speed - {:F2} mb/s)");
 
                     return alg.Hash.ToHashString();
                 }
@@ -271,8 +294,7 @@ namespace FileSync.Android
 
             var requestPermissionsTask = _requestPermissionsTaskCompletionSource.Task;
 
-            var timedOut = await Task.WhenAny(requestPermissionsTask, Task.Delay(PermissionsTimeout)) ==
-                           requestPermissionsTask;
+            var timedOut = await Task.WhenAny(requestPermissionsTask, Task.Delay(PermissionsTimeout)) == requestPermissionsTask;
 
             await requestTask;
 
