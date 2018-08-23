@@ -132,7 +132,7 @@ namespace FileSync.Android
 
             using (var ff = new FileStream(fs.FullName, FileMode.Open, FileAccess.Read, FileShare.Read, readBufferSize, fileOptions))
             {
-                hash1 = XxHash64Unsafe.ComputeHash(ff, 133219);
+                hash1 = await XxHash64Managed.ComputeHash(ff, 133479, (int) fs.Length, (buffer, length) => Task.CompletedTask);
             }
             sww.Stop();
 

@@ -161,10 +161,10 @@ namespace FileSync.Server
 
             using (var ff = new FileStream(fs.FullName, FileMode.Open, FileAccess.Read, FileShare.Read, readBufferSize))
             {
-                //var hash1 = XxHash64Unsafe.ComputeHash(ff, 783);
-                var hash2 = XxHash64Unsafe.ComputeHash(ff, BufferSizeMib*1024*1024);
+                var hash1 = XxHash64Managed.ComputeHash(ff, 133479, (int) fs.Length, (buffer, length) => Task.CompletedTask).Result;
+                var hash2 = XxHash64Managed.ComputeHash(ff, BufferSizeMib * 1024 * 1024, (int) fs.Length, (buffer, length) => Task.CompletedTask).Result;
 
-                //Console.WriteLine(hash1 == hash2);
+                Console.WriteLine(hash1 == hash2);
             }
             sww.Stop();
 
