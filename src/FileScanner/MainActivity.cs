@@ -69,7 +69,7 @@ namespace FileSync.Android
             var btn3 = FindViewById<Button>(Resource.Id.button3);
             btn3.Click += Btn3OnClick;
 
-            Task.Run(async () => { await ClientDiscoverDelay(); });
+            Task.Run(ClientDiscoverDelay);
         }
 
         private async Task ClientDiscoverDelay()
@@ -85,41 +85,147 @@ namespace FileSync.Android
             var cts = new TaskCompletionSource<IPEndPoint>();
             _discoverTask = cts.Task;
 
-            using (var client = new UdpClient())
+            try
             {
-                var requestData = Encoding.ASCII.GetBytes("SomeRequestData");
+                AppendLog("Discovering...");
 
-                client.EnableBroadcast = true;
-                await client.SendAsync(requestData, requestData.Length, new IPEndPoint(IPAddress.Broadcast, 8888));
+                using (var client = new UdpClient())
+                {
+                    var requestData = Encoding.ASCII.GetBytes("SomeRequestData");
 
-                var serverResponseData = await client.ReceiveAsync();
-                var serverResponse = Encoding.ASCII.GetString(serverResponseData.Buffer);
+                    client.EnableBroadcast = true;
+                    await client.SendAsync(requestData, requestData.Length, new IPEndPoint(IPAddress.Broadcast, 8888));
 
-                var port = int.Parse(serverResponse.Replace("port:", null));
+                    var serverResponseData = await client.ReceiveAsync();
+                    var serverResponse = Encoding.ASCII.GetString(serverResponseData.Buffer);
 
-                var ss = $"Discovered on {serverResponseData.RemoteEndPoint.Address}:{port}";
+                    var port = int.Parse(serverResponse.Replace("port:", null));
 
-                AppendLog(ss);
+                    var ss = $"Discovered on {serverResponseData.RemoteEndPoint.Address}:{port}";
 
-                cts.SetResult(new IPEndPoint(serverResponseData.RemoteEndPoint.Address, port));
+                    AppendLog(ss);
 
-                client.Close();
+                    cts.SetResult(new IPEndPoint(serverResponseData.RemoteEndPoint.Address, port));
+
+                    client.Close();
+                }
+
+                AppendLog("Discover done");
+            }
+            catch (Exception e)
+            {
+                AppendLog($"Error while discovering\r\n{e}");
             }
         }
 
+        private static string CalcSpeed(long length, Stopwatch sw)
+        {
+            return $"{length / 1024d / 1024d / sw.Elapsed.TotalSeconds:F2} mb/s" ;
+        }
 
         private async void Btn3OnClick(object sender, EventArgs e)
         {
+            return;
             var res = await TryGetpermissionsAsync();
             if (!res)
             {
                 return;
             }
 
-            //var fs = new FileInfo("/storage/emulated/0/stest/ghh.mp4");
-            var fs = new FileInfo("/storage/emulated/0/shcherban.7z");
+            try
+            {
+                var fs = new FileInfo("/storage/emulated/0/stest/ghh.mp4");
+                //var fs = new FileInfo("/storage/emulated/0/shcherban.7z");
 
-            var sww = Stopwatch.StartNew();
+                using (var client = new TcpClient())
+                {
+                    await client.ConnectAsync(_discoverTask.Result.Address, _discoverTask.Result.Port + 1);
+
+                    using (var networkStream = client.GetStream())
+                    {
+                        var sw = Stopwatch.StartNew();
+
+                        var initReadHash = await NetworkHelperSequential.HashFileAsync(fs);
+
+                        sw.Stop();
+
+                        AppendLog($"Local read hash speed: {CalcSpeed(fs.Length, sw)}");
+
+                        var fileLengthBytes = BitConverter.GetBytes(fs.Length);
+                        var fileLengthBytesCount = sizeof(long);
+
+                        await networkStream.WriteAsync(fileLengthBytes, 0, fileLengthBytesCount);
+
+                        sw.Restart();
+
+                        var sendHash = await NetworkHelperSequential.WriteFromFileAndHashAsync(networkStream, fs.FullName, (int)fs.Length);
+
+                        sw.Stop();
+
+                        AppendLog($"Send and hash speed: {CalcSpeed(fs.Length, sw)}");
+
+                        await networkStream.WriteAsync(sendHash, 0, sizeof(ulong));
+
+                        fileLengthBytesCount = sizeof(long);
+                        fileLengthBytes = new byte[fileLengthBytesCount];
+
+                        var read = await networkStream.ReadAsync(fileLengthBytes, 0, fileLengthBytesCount);
+                        if (read != fileLengthBytesCount)
+                        {
+                            throw new InvalidOperationException("Invalid data length read");
+                        }
+
+                        var fileLength = BitConverter.ToInt64(fileLengthBytes, 0);
+
+                        if (File.Exists("/storage/emulated/0/stest/ghh1.mp4"))
+                        {
+                            File.Delete("/storage/emulated/0/stest/ghh1.mp4");
+                        }
+
+                        sw.Restart();
+
+                        var receiveHash = await NetworkHelperSequential.ReadToFileAndHashAsync(networkStream, "/storage/emulated/0/stest/ghh1.mp4", (int)fileLength);
+
+                        sw.Stop();
+
+                        AppendLog($"Receive and hash speed: {CalcSpeed(fileLength, sw)}");
+
+                        var hashBuffer = new byte[sizeof(ulong)];
+
+                        await networkStream.ReadAsync(hashBuffer, 0, sizeof(ulong));
+
+                        sw.Restart();
+
+                        var receivedFileHash = await NetworkHelperSequential.HashFileAsync("/storage/emulated/0/stest/ghh1.mp4", (int)fileLength);
+
+                        sw.Stop();
+
+                        AppendLog($"Local read hash speed: {CalcSpeed(fileLength, sw)}");
+
+                        var initReadHashStr = initReadHash.ToHashString();
+                        var sendHashStr = sendHash.ToHashString();
+                        var receiveHashStr = receiveHash.ToHashString();
+                        var receivedHashStr = hashBuffer.ToHashString();
+                        var receivedFileHashStr = receivedFileHash.ToHashString();
+
+                        AppendLog($"initReadHashStr     {initReadHashStr}\r\n" +
+                                  $"sendHashStr         {sendHashStr}\r\n" +
+                                  $"receiveHashStr      {receiveHashStr}\r\n" +
+                                  $"receivedHashStr     {receivedHashStr}\r\n" +
+                                  $"receivedFileHashStr {receivedFileHashStr}");
+                    }
+                }
+            }
+            catch (Exception exception)
+            {
+                AppendLog($"Error:\r\n{exception}");
+            }
+
+            
+
+            return;
+
+            /*var sww = Stopwatch.StartNew();
             const FileOptions fileFlagNoBuffering = (FileOptions)0x20000000;
             const FileOptions fileOptions = fileFlagNoBuffering | FileOptions.SequentialScan;
 
@@ -128,11 +234,11 @@ namespace FileSync.Android
             var readBufferSize = chunkSize;
             readBufferSize += ((readBufferSize + 1023) & ~1023) - readBufferSize;
 
-            ulong hash1, hash2;
+            byte[] hash1, hash2;
 
             using (var ff = new FileStream(fs.FullName, FileMode.Open, FileAccess.Read, FileShare.Read, readBufferSize, fileOptions))
             {
-                hash1 = await XxHash64Managed.ComputeHash(ff, 133479, (int) fs.Length, (buffer, length) => Task.CompletedTask);
+                hash1 = await XxHash64Callback.ComputeHash(ff, 133479, (int) fs.Length, (buffer, length) => Task.CompletedTask);
             }
             sww.Stop();
 
@@ -144,7 +250,7 @@ namespace FileSync.Android
 
             using (var ff = new FileStream(fs.FullName, FileMode.Open, FileAccess.Read, FileShare.Read, readBufferSize, fileOptions))
             {
-                hash2 = XxHash64Unsafe.ComputeHash(ff, BufferSizeMib * 1024 * 1024);
+                //hash2 = XxHash64Unsafe.ComputeHash(ff, BufferSizeMib * 1024 * 1024);
             }
 
             sww.Stop();
@@ -157,23 +263,13 @@ namespace FileSync.Android
             //var h1 = await TestHash(xxHash64Algo.Create(), fs.FullName, (int) fs.Length, 124959);
             //var h2 = await TestHash(xxHash64Algo.Create(), fs.FullName, (int) fs.Length, BufferSizeMib*1024*1024);
 
-            AppendLog($"hashes equals {hash1 == hash2}");
+            //AppendLog($"hashes equals {hash1 == hash2}");*/
         }
 
         private async Task TestAlgos()
         {
             var fname = "";
             var fs = new FileInfo(fname);
-
-            /*using (var client = new TcpClient())
-            {
-                await client.ConnectAsync(_discoverTask.Result.Address, _discoverTask.Result.Port + 1);
-
-                using (var networkStream = client.GetStream())
-                {
-                    await NetworkHelper.WriteFromFile(networkStream, fname);
-                }
-            }*/
         }
 
         private const int BufferSizeMib = 1;
@@ -250,11 +346,6 @@ namespace FileSync.Android
             System.Diagnostics.Debug.WriteLine($"***** {alg.GetType().Name} {sw.Elapsed.TotalMilliseconds:F2} ms (buffer - {bsize} bytes, speed - {(fname.Length / 1024m / 1024m) / (decimal) sw.Elapsed.TotalSeconds:F2} mb/s)");
         }
 
-        private void CommunicatorOnEv(string s)
-        {
-            AppendLog(s);
-        }
-
         private void AppendLog(string msg)
         {
             Task.Run(() =>
@@ -265,10 +356,6 @@ namespace FileSync.Android
 
         private void Btn2OnClick(object sender, EventArgs e)
         {
-            return;
-            var i = new Intent(this, typeof(DemoService));
-            i.PutExtra("data", "stop");
-            var cn = StopService(i);
         }
 
 
@@ -290,19 +377,16 @@ namespace FileSync.Android
 
             _requestPermissionsTaskCompletionSource = new TaskCompletionSource<bool>();
 
-            var requestTask = Task.Run(() => { RequestPermissions(_permissions, RequestId); });
+            Task.Run(() => { RequestPermissions(_permissions, RequestId); });
 
             var requestPermissionsTask = _requestPermissionsTaskCompletionSource.Task;
 
             var timedOut = await Task.WhenAny(requestPermissionsTask, Task.Delay(PermissionsTimeout)) == requestPermissionsTask;
 
-            await requestTask;
-
             return timedOut;
         }
 
-        public override void OnRequestPermissionsResult(int requestCode, string[] permissions,
-            Permission[] grantResults)
+        public override void OnRequestPermissionsResult(int requestCode, string[] permissions, Permission[] grantResults)
         {
             base.OnRequestPermissionsResult(requestCode, permissions, grantResults);
 
@@ -347,87 +431,6 @@ namespace FileSync.Android
             client.Log += AppendLog;
 
             await client.Sync();
-
-            return;
-            var i = new Intent(this, typeof(DemoService));
-            i.PutExtra("data", DateTime.Now.ToString("G"));
-            var cn = StartService(i);
-        }
-
-        private static uint To32BitFnv1aHash(byte[] bytes)
-        {
-            var hash = FnvConstants.FnvOffset32;
-
-            foreach (var chunk in bytes)
-            {
-                hash ^= chunk;
-                hash *= FnvConstants.FnvPrime32;
-            }
-
-            return hash;
-        }
-
-        public static class FnvConstants
-        {
-            public static readonly uint FnvPrime32 = 16777619;
-            public static readonly ulong FnvPrime64 = 1099511628211;
-            public static readonly uint FnvOffset32 = 2166136261;
-            public static readonly ulong FnvOffset64 = 14695981039346656037;
-        }
-    }
-
-    static class Communicator
-    {
-        public static event Action<string> Ev;
-
-        public static void Log(string msg)
-        {
-            Ev?.Invoke(msg);
-        }
-    }
-
-    [Service]
-    public class DemoService : IntentService
-    {
-        public DemoService() : base("DemoService")
-        {
-        }
-
-        protected override void OnHandleIntent(Intent intent)
-        {
-            var data = intent.GetStringExtra("data");
-
-            Log.Debug(GetType().Name, $"Service: {data}");
-
-            Task.Run(async () =>
-            {
-                while (true)
-                {
-                    try
-                    {
-                        Communicator.Log($"work {DateTime.Now:G}");
-                        await Task.Delay(1000);
-                    }
-                    catch (Exception e)
-                    {
-                        Console.WriteLine(e);
-                    }
-                }
-            }).Wait();
-        }
-
-        public override ComponentName StartService(Intent service)
-        {
-            Log.Debug(GetType().Name, $"StartService");
-
-            return base.StartService(service);
-        }
-
-        public override bool StopService(Intent name)
-        {
-            Log.Debug(GetType().Name, $"StopService");
-
-            return base.StopService(name);
         }
     }
 }

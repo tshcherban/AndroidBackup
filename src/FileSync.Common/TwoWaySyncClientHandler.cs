@@ -39,7 +39,7 @@ namespace FileSync.Common
         {
             try
             {
-                var cmdHeader = await NetworkHelper.ReadCommandHeader(_networkStream);
+                var cmdHeader = await NetworkHelperSequential.ReadCommandHeader(_networkStream);
 
                 switch (cmdHeader.Command)
                 {
@@ -125,13 +125,13 @@ namespace FileSync.Common
 
             var responseBytes = Serializer.Serialize(response);
             var length = responseBytes.Length;
-            await NetworkHelper.WriteCommandHeader(_networkStream, Commands.GetSessionCmd, length);
-            await NetworkHelper.WriteBytes(_networkStream, responseBytes);
+            await NetworkHelperSequential.WriteCommandHeader(_networkStream, Commands.GetSessionCmd, length);
+            await NetworkHelperSequential.WriteBytes(_networkStream, responseBytes);
         }
 
         private async Task ProcessFinishSessionCmd(CommandHeader cmdHeader)
         {
-            var sessionId = await NetworkHelper.Read<Guid>(_networkStream, cmdHeader.PayloadLength);
+            var sessionId = await NetworkHelperSequential.Read<Guid>(_networkStream, cmdHeader.PayloadLength);
 
             var response = new ServerResponseWithData<SyncInfo>();
 
@@ -163,8 +163,8 @@ namespace FileSync.Common
 
             var responseBytes = Serializer.Serialize(response);
             var length = responseBytes.Length;
-            await NetworkHelper.WriteCommandHeader(_networkStream, Commands.FinishSessionCmd, length);
-            await NetworkHelper.WriteBytes(_networkStream, responseBytes);
+            await NetworkHelperSequential.WriteCommandHeader(_networkStream, Commands.FinishSessionCmd, length);
+            await NetworkHelperSequential.WriteBytes(_networkStream, responseBytes);
         }
 
         private void FinishSession(Session session)
@@ -199,7 +199,7 @@ namespace FileSync.Common
 
         private async Task ProcessSendFileCmd(CommandHeader cmdHeader)
         {
-            var data = await NetworkHelper.Read<SendFileCommandData>(_networkStream, cmdHeader.PayloadLength);
+            var data = await NetworkHelperSequential.Read<SendFileCommandData>(_networkStream, cmdHeader.PayloadLength);
 
             var ret = new ServerResponse();
 
@@ -222,7 +222,7 @@ namespace FileSync.Common
 
                 var sw = Stopwatch.StartNew();
 
-                var newHash = await NetworkHelper.ReadToFile(_networkStream, filePath, data.FileLength);
+                var newHash = await NetworkHelperSequential.ReadToFileAndHashAsync(_networkStream, filePath, (int)data.FileLength);
 
                 sw.Stop();
 
@@ -231,18 +231,18 @@ namespace FileSync.Common
                 var fileInfo = session.SyncDb.Files.FirstOrDefault(i => i.RelativePath == data.RelativeFilePath);
                 if (fileInfo != null)
                 {
-                    fileInfo.HashStr = newHash;
+                    fileInfo.HashStr = newHash.ToHashString();
                 }
                 else
                 {
-                    session.SyncDb.AddFile(session.BaseDir, data.RelativeFilePath, newHash);
+                    session.SyncDb.AddFile(session.BaseDir, data.RelativeFilePath, newHash.ToHashString());
                 }
             }
         }
 
         private async Task ProcessGetFileCmd(CommandHeader cmdHeader)
         {
-            var data = await NetworkHelper.Read<GetFileCommandData>(_networkStream, cmdHeader.PayloadLength);
+            var data = await NetworkHelperSequential.Read<GetFileCommandData>(_networkStream, cmdHeader.PayloadLength);
 
             var ret = new ServerResponse();
 
@@ -262,15 +262,15 @@ namespace FileSync.Common
                 var filePath = Path.Combine(session.BaseDir, data.RelativeFilePath);
                 var fileLength = new FileInfo(filePath).Length;
                 var fileLengthBytes = BitConverter.GetBytes(fileLength);
-                await NetworkHelper.WriteCommandHeader(_networkStream, Commands.GetFileCmd, sizeof(long));
-                await NetworkHelper.WriteBytes(_networkStream, fileLengthBytes);
-                await NetworkHelper.WriteFromFile(_networkStream, filePath);
+                await NetworkHelperSequential.WriteCommandHeader(_networkStream, Commands.GetFileCmd, sizeof(long));
+                await NetworkHelperSequential.WriteBytes(_networkStream, fileLengthBytes);
+                await NetworkHelperSequential.WriteFromFileAndHashAsync(_networkStream, filePath, (int)fileLength);
             }
         }
 
         private async Task ProcessGetSyncListCmd(CommandHeader cmdHeader)
         {
-            var data = await NetworkHelper.Read<GetSyncListCommandData>(_networkStream, cmdHeader.PayloadLength);
+            var data = await NetworkHelperSequential.Read<GetSyncListCommandData>(_networkStream, cmdHeader.PayloadLength);
 
             var ret = new ServerResponseWithData<SyncInfo>();
 
@@ -380,8 +380,8 @@ namespace FileSync.Common
 
             var responseBytes = Serializer.Serialize(ret);
             var length = responseBytes.Length;
-            await NetworkHelper.WriteCommandHeader(_networkStream, Commands.GetSyncListCmd, length);
-            await NetworkHelper.WriteBytes(_networkStream, responseBytes);
+            await NetworkHelperSequential.WriteCommandHeader(_networkStream, Commands.GetSyncListCmd, length);
+            await NetworkHelperSequential.WriteBytes(_networkStream, responseBytes);
         }
 
         private SyncDatabase GetSyncDb(string baseDir, string syncDbDir, out string error)
@@ -420,14 +420,11 @@ namespace FileSync.Common
                 {
                     var localFile = localFiles[localFileIdx];
                     localFiles.RemoveAt(localFileIdx);
-                    using (HashAlgorithm alg = new MurmurHash3UnsafeProvider())
-                    {
-                        using (var localFileStream = File.OpenRead(localFile))
-                        {
-                            alg.ComputeHash(localFileStream);
-                        }
 
-                        var localFileHash = alg.Hash.ToHashString();
+                    {
+                        var hash = NetworkHelperSequential.HashFileAsync(new FileInfo(localFile)).Result;
+
+                        var localFileHash = hash.ToHashString();
                         if (localFileHash != stored.HashStr)
                         {
                             stored.State = SyncFileState.Modified;
@@ -444,13 +441,12 @@ namespace FileSync.Common
 
                 var localFileRelativePath = localFile.Replace(baseDir, string.Empty);
 
-                using (HashAlgorithm alg = new MurmurHash3UnsafeProvider())
                 {
-                    alg.ComputeHash(File.OpenRead(localFile));
+                    var hash = NetworkHelperSequential.HashFileAsync(new FileInfo(localFile)).Result;
 
                     return new SyncFileInfo
                     {
-                        HashStr = alg.Hash.ToHashString(),
+                        HashStr = hash.ToHashString(),
                         RelativePath = localFileRelativePath,
                         AbsolutePath = localFile,
                         State = SyncFileState.New,

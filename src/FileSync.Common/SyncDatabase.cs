@@ -49,16 +49,12 @@ namespace FileSync.Common
                     return null;
                 }
 
-                using (HashAlgorithm alg = new MurmurHash3UnsafeProvider())
                 {
-                    using (var fileStream = File.OpenRead(i))
-                    {
-                        alg.ComputeHash(fileStream);
-                    }
+                    var hash = NetworkHelperSequential.HashFileAsync(new FileInfo(i)).Result;
 
                     return new SyncFileInfo
                     {
-                        HashStr = alg.Hash.ToHashString(),
+                        HashStr = hash.ToHashString(),
                         RelativePath = i.Replace(baseDir, string.Empty),
                         AbsolutePath = i,
                         State = SyncFileState.New,

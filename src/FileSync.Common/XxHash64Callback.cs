@@ -5,7 +5,7 @@ using System.Threading.Tasks;
 
 namespace FileSync.Common
 {
-    public sealed class XxHash64Managed
+    public static class XxHash64Callback
     {
         private const int Min64 = 1024;
         private const int Div32 = 0x7FFFFFE0;
@@ -16,14 +16,17 @@ namespace FileSync.Common
         private const ulong P4 = 9650029242287828579UL;
         private const ulong P5 = 2870177450012600261UL;
 
-        public static async Task<ulong> ComputeHash(Stream stream, int bufferSize, int length, Func<byte[], int, Task> callback)
+        public static async Task<byte[]> ComputeHash(Stream stream, int bufferSize, int length, Func<byte[], int, Task> callback)
         {
-            // Go to the beginning of the stream
-            stream.Seek(0, SeekOrigin.Begin);
-
             // The buffer can't be less than 1024 bytes
-            if (bufferSize < Min64) bufferSize = Min64;
-            else bufferSize &= Div32;
+            if (bufferSize < Min64)
+            {
+                bufferSize = Min64;
+            }
+            else
+            {
+                bufferSize &= Div32;
+            }
 
             // Calculate the number of chunks and the remain
             var chunks = length / bufferSize;
@@ -46,7 +49,18 @@ namespace FileSync.Common
             }
         }
 
-        private static async Task<ulong> HashCore(Stream stream, int bufferSize, int chunks, int offset, byte[] buffer, long length, Func<byte[], int, Task> callback)
+        private static void ReadExact(Stream stream, byte[] buffer, int count)
+        {
+            var left = count;
+            var read = 0;
+            while (left > 0)
+            {
+                read += stream.Read(buffer, read, left);
+                left = count - read;
+            }
+        }
+
+        private static async Task<byte[]> HashCore(Stream stream, int bufferSize, int chunks, int offset, byte[] buffer, long length, Func<byte[], int, Task> callback)
         {
             // Prepare the seed vector
             var v1 = unchecked(P1 + P2);
@@ -55,6 +69,8 @@ namespace FileSync.Common
             var v4 = P1;
 
             Task callbackTask;
+
+            long read = 0;
 
             // Process chunks
             // Skip the last chunk. It will processed a little bit later
@@ -67,9 +83,10 @@ namespace FileSync.Common
                 }
 
                 // Read the next chunk
-                stream.Read(buffer, 0, bufferSize);
+                ReadExact(stream, buffer, bufferSize);
 
-                
+                read += bufferSize;
+
                 callbackTask = callback(buffer, bufferSize);
 
                 unsafe
@@ -108,9 +125,14 @@ namespace FileSync.Common
             }
 
             // Read the last chunk
-            offset = stream.Read(buffer, 0, bufferSize);
+            //offset = stream.Read(buffer, 0, bufferSize);
 
-            callbackTask = callback(buffer, offset);
+            var toRead = length - read;
+            var toReadInt = (int) toRead;
+
+            ReadExact(stream, buffer, toReadInt);
+
+            callbackTask = callback(buffer, toReadInt);
 
             ulong h64;
 
@@ -120,7 +142,7 @@ namespace FileSync.Common
                 fixed (byte* pData = &buffer[0])
                 {
                     var ptr = pData;
-                    var end = pData + offset;
+                    var end = pData + toReadInt;
 
                     if (length >= 32)
                     {
@@ -225,7 +247,7 @@ namespace FileSync.Common
 
             await callbackTask;
 
-            return h64;
+            return BitConverter.GetBytes(h64);
         }
     }
 }

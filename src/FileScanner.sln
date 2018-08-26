@@ -13,6 +13,11 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "FileSync.TestClient", "Cust
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "FileSync.Tests", "FileSync.Tests\FileSync.Tests.csproj", "{767E8E88-4C9F-4A74-AF06-5060247DA6DC}"
 EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution Items", "{0B6AE39F-A4BD-4009-AF68-C24150FFC13B}"
+	ProjectSection(SolutionItems) = preProject
+		FileScanner.sln.DotSettings = FileScanner.sln.DotSettings
+	EndProjectSection
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|x64 = Debug|x64

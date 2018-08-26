@@ -5,20 +5,18 @@ using System.IO;
 using System.Linq;
 using System.Net;
 using System.Net.Sockets;
-using System.Security.Cryptography;
 using System.Threading.Tasks;
 
 namespace FileSync.Common
 {
     internal sealed class TwoWaySyncClientImpl : ISyncClient
     {
-        private const string FileListToRemove = "toremove.txt";
-        private const string FileListToAddorUpdate = "newfiles.txt";
-
         private readonly string _serverAddress;
         private readonly int _serverPort;
         private readonly string _baseDir;
         private readonly string _syncDbDir;
+        private readonly string _toRemoveDir;
+        private readonly string _newDir;
 
         private Guid _sessionId;
 
@@ -30,6 +28,8 @@ namespace FileSync.Common
             _serverPort = serverPort;
             _baseDir = baseDir;
             _syncDbDir = syncDbDir;
+            _toRemoveDir = Path.Combine(syncDbDir, "ToRemove");
+            _newDir = Path.Combine(syncDbDir, "New");
         }
 
         public async Task Sync()
@@ -71,13 +71,33 @@ namespace FileSync.Common
                             return;
                         }
 
+                        if (!Directory.Exists(_toRemoveDir))
+                        {
+                            Directory.CreateDirectory(_toRemoveDir);
+                        }
+
+                        if (!Directory.Exists(_newDir))
+                        {
+                            Directory.CreateDirectory(_newDir);
+                        }
+
                         foreach (var fileInfo in syncList.Data.ToRemove)
                         {
                             var filePath = Path.Combine(_baseDir, fileInfo.RelativePath);
-                            var movedFilePath = filePath + "._sr";
+                            var movedFilePath = Path.Combine(_toRemoveDir, fileInfo.RelativePath);
+
+                            var movedFilePathDir = Path.GetDirectoryName(movedFilePath);
+                            if (movedFilePathDir == null)
+                            {
+                                throw new InvalidOperationException($"Unable to get '{movedFilePath}'s dir");
+                            }
+
+                            if (!Directory.Exists(movedFilePath))
+                            {
+                                Directory.CreateDirectory(movedFilePathDir);
+                            }
+
                             File.Move(filePath, movedFilePath);
-                            var path = Path.Combine(_syncDbDir, FileListToRemove);
-                            File.AppendAllText(path, $"{movedFilePath}{filePath}");
                         }
 
                         if (syncList.Data.Conflicts.Count > 0)
@@ -105,9 +125,15 @@ namespace FileSync.Common
 
                         FinishLocalSession();
 
+                        foreach (var file in syncDb.Files)
+                        {
+                            file.HashStr = (await NetworkHelperSequential.HashFileAsync(new FileInfo(file.AbsolutePath))).ToHashString();
+                            file.State = SyncFileState.NotChanged;
+                        }
+
                         syncDb.Store(_syncDbDir);
 
-                        await NetworkHelper.WriteCommandHeader(networkStream, Commands.DisconnectCmd);
+                        await NetworkHelperSequential.WriteCommandHeader(networkStream, Commands.DisconnectCmd);
                     }
                 }
             }
@@ -119,59 +145,40 @@ namespace FileSync.Common
 
         private void FinishLocalSession()
         {
-            var filesToRemove = Path.Combine(_syncDbDir, FileListToRemove);
-            if (File.Exists(filesToRemove))
+            foreach (var filePath in Directory.EnumerateFiles(_toRemoveDir))
             {
-                var removeLines = File.ReadAllLines(filesToRemove);
-                if (removeLines.Length % 2 != 0)
-                {
-                    throw new InvalidOperationException("Service file structure corrupt");
-                }
-
-                for (var i = 0; i < removeLines.Length - 1; i += 2)
-                {
-                    File.Delete(removeLines[i]);
-                }
-
-                File.Delete(filesToRemove);
+                File.Delete(filePath);
             }
 
-            var newFiles = Path.Combine(_syncDbDir, FileListToAddorUpdate);
-            if (File.Exists(newFiles))
+            foreach (var filePath in Directory.EnumerateFiles(_newDir))
             {
-                var newLines = File.ReadAllLines(newFiles);
-                if (newLines.Length % 3 != 0)
+                var destinatinFilePath = filePath.Replace(_newDir, _baseDir);
+
+                if (File.Exists(destinatinFilePath))
                 {
-                    throw new InvalidOperationException("Service file structure corrupt");
+                    File.Delete(destinatinFilePath);
                 }
 
-                for (var i = 0; i < newLines.Length - 1; i += 3)
-                {
-                    var destinationFile = newLines[i + 1];
-                    if (File.Exists(destinationFile))
-                    {
-                        File.Delete(destinationFile);
-                    }
-
-                    File.Move(newLines[i], destinationFile);
-                }
-
-                File.Delete(newFiles);
+                File.Move(filePath, destinatinFilePath);
             }
         }
 
         private async Task<ServerResponseWithData<Guid>> GetSession(Stream networkStream)
         {
-            await NetworkHelper.WriteCommandHeader(networkStream, Commands.GetSessionCmd);
+            await NetworkHelperSequential.WriteCommandHeader(networkStream, Commands.GetSessionCmd);
 
-            var cmdHeader = await NetworkHelper.ReadCommandHeader(networkStream);
+            var cmdHeader = await NetworkHelperSequential.ReadCommandHeader(networkStream);
             if (cmdHeader.Command != Commands.GetSessionCmd)
-                return new ServerResponseWithData<Guid> { ErrorMsg = "Wrong command received" };
+            {
+                return new ServerResponseWithData<Guid> {ErrorMsg = "Wrong command received"};
+            }
 
             if (cmdHeader.PayloadLength == 0)
-                return new ServerResponseWithData<Guid> { ErrorMsg = "No data received" };
+            {
+                return new ServerResponseWithData<Guid> {ErrorMsg = "No data received"};
+            }
 
-            var responseBytes = await NetworkHelper.ReadBytes(networkStream, cmdHeader.PayloadLength);
+            var responseBytes = await NetworkHelperSequential.ReadBytes(networkStream, cmdHeader.PayloadLength);
             var response = Serializer.Deserialize<ServerResponseWithData<Guid>>(responseBytes);
 
             return response;
@@ -181,17 +188,17 @@ namespace FileSync.Common
         {
             var cmdDataBytes = Serializer.Serialize(sessionId);
 
-            await NetworkHelper.WriteCommandHeader(networkStream, Commands.FinishSessionCmd, cmdDataBytes.Length);
-            await NetworkHelper.WriteBytes(networkStream, cmdDataBytes);
+            await NetworkHelperSequential.WriteCommandHeader(networkStream, Commands.FinishSessionCmd, cmdDataBytes.Length);
+            await NetworkHelperSequential.WriteBytes(networkStream, cmdDataBytes);
 
-            var cmdHeader = await NetworkHelper.ReadCommandHeader(networkStream);
+            var cmdHeader = await NetworkHelperSequential.ReadCommandHeader(networkStream);
             if (cmdHeader.Command != Commands.FinishSessionCmd)
-                return new ServerResponseWithData<SyncInfo> { ErrorMsg = "Wrong command received" };
+                return new ServerResponseWithData<SyncInfo> {ErrorMsg = "Wrong command received"};
 
             if (cmdHeader.PayloadLength == 0)
-                return new ServerResponseWithData<SyncInfo> { ErrorMsg = "No data received" };
+                return new ServerResponseWithData<SyncInfo> {ErrorMsg = "No data received"};
 
-            var responseBytes = await NetworkHelper.ReadBytes(networkStream, cmdHeader.PayloadLength);
+            var responseBytes = await NetworkHelperSequential.ReadBytes(networkStream, cmdHeader.PayloadLength);
             var response = Serializer.Deserialize<ServerResponse>(responseBytes);
 
             return response;
@@ -211,9 +218,9 @@ namespace FileSync.Common
                     RelativeFilePath = fileInfo.RelativePath,
                 };
                 var dataBytes = Serializer.Serialize(data);
-                await NetworkHelper.WriteCommandHeader(networkStream, Commands.SendFileCmd, dataBytes.Length);
-                await NetworkHelper.WriteBytes(networkStream, dataBytes);
-                await NetworkHelper.WriteFromFile(networkStream, filePath);
+                await NetworkHelperSequential.WriteCommandHeader(networkStream, Commands.SendFileCmd, dataBytes.Length);
+                await NetworkHelperSequential.WriteBytes(networkStream, dataBytes);
+                await NetworkHelperSequential.WriteFromFileAndHashAsync(networkStream, filePath, (int) fileLength);
             }
 
             return true;
@@ -221,18 +228,6 @@ namespace FileSync.Common
 
         private async Task<bool> ReceiveFiles(Stream networkStream, IEnumerable<SyncFileInfo> dataToDownload)
         {
-            var newFilesList = Path.Combine(_syncDbDir, FileListToAddorUpdate);
-            var directoryName = Path.GetDirectoryName(newFilesList);
-            if (directoryName == null)
-            {
-                throw new InvalidOperationException("Unable get syncDb folder");
-            }
-
-            if (!Directory.Exists(directoryName))
-            {
-                Directory.CreateDirectory(directoryName);
-            }
-
             foreach (var fileInfo in dataToDownload)
             {
                 var data = new GetFileCommandData
@@ -242,29 +237,30 @@ namespace FileSync.Common
                 };
                 var dataBytes = Serializer.Serialize(data);
 
-                await NetworkHelper.WriteCommandHeader(networkStream, Commands.GetFileCmd, dataBytes.Length);
-                await NetworkHelper.WriteBytes(networkStream, dataBytes);
+                await NetworkHelperSequential.WriteCommandHeader(networkStream, Commands.GetFileCmd, dataBytes.Length);
+                await NetworkHelperSequential.WriteBytes(networkStream, dataBytes);
 
-                var cmdHeader = await NetworkHelper.ReadCommandHeader(networkStream);
+                var cmdHeader = await NetworkHelperSequential.ReadCommandHeader(networkStream);
                 if (cmdHeader.Command != Commands.GetFileCmd)
+                {
                     return false;
+                }
 
                 if (cmdHeader.PayloadLength == 0)
+                {
                     return false;
+                }
 
-                var fileLengthBytes = await NetworkHelper.ReadBytes(networkStream, cmdHeader.PayloadLength);
+                var fileLengthBytes = await NetworkHelperSequential.ReadBytes(networkStream, cmdHeader.PayloadLength);
                 var fileLength = BitConverter.ToInt64(fileLengthBytes, 0);
 
-                var tmpFilePath = Path.Combine(_baseDir, fileInfo.RelativePath) + "._sn";
-                var filePath = Path.Combine(_baseDir, fileInfo.RelativePath);
-                var newHash = await NetworkHelper.ReadToFile(networkStream, tmpFilePath, fileLength);
+                var tmpFilePath = Path.Combine(_newDir, fileInfo.RelativePath);
+                var newHash = await NetworkHelperSequential.ReadToFileAndHashAsync(networkStream, tmpFilePath, (int) fileLength);
 
-                if (!string.Equals(newHash, fileInfo.HashStr, StringComparison.OrdinalIgnoreCase))
+                if (!string.Equals(newHash.ToHashString(), fileInfo.HashStr, StringComparison.OrdinalIgnoreCase))
                 {
                     throw new InvalidOperationException("File copy error: hash mismatch");
                 }
-
-                File.AppendAllText(newFilesList, $"{tmpFilePath}\r\n{filePath}\r\n\r\n");
             }
 
             return true;
@@ -280,17 +276,17 @@ namespace FileSync.Common
 
             var cmdDataBytes = Serializer.Serialize(cmdData);
 
-            await NetworkHelper.WriteCommandHeader(networkStream, Commands.GetSyncListCmd, cmdDataBytes.Length);
-            await NetworkHelper.WriteBytes(networkStream, cmdDataBytes);
+            await NetworkHelperSequential.WriteCommandHeader(networkStream, Commands.GetSyncListCmd, cmdDataBytes.Length);
+            await NetworkHelperSequential.WriteBytes(networkStream, cmdDataBytes);
 
-            var cmdHeader = await NetworkHelper.ReadCommandHeader(networkStream);
+            var cmdHeader = await NetworkHelperSequential.ReadCommandHeader(networkStream);
             if (cmdHeader.Command != Commands.GetSyncListCmd)
-                return new ServerResponseWithData<SyncInfo> { ErrorMsg = "Wrong command received" };
+                return new ServerResponseWithData<SyncInfo> {ErrorMsg = "Wrong command received"};
 
             if (cmdHeader.PayloadLength == 0)
-                return new ServerResponseWithData<SyncInfo> { ErrorMsg = "No data received" };
+                return new ServerResponseWithData<SyncInfo> {ErrorMsg = "No data received"};
 
-            var responseBytes = await NetworkHelper.ReadBytes(networkStream, cmdHeader.PayloadLength);
+            var responseBytes = await NetworkHelperSequential.ReadBytes(networkStream, cmdHeader.PayloadLength);
             var response = Serializer.Deserialize<ServerResponseWithData<SyncInfo>>(responseBytes);
 
             return response;
@@ -332,14 +328,10 @@ namespace FileSync.Common
                 {
                     var localFile = localFiles[localFileIdx];
                     localFiles.RemoveAt(localFileIdx);
-                    using (HashAlgorithm alg = new MurmurHash3UnsafeProvider())
                     {
-                        using (var fileStream = File.OpenRead(localFile))
-                        {
-                            alg.ComputeHash(fileStream);
-                        }
+                        var hash = NetworkHelperSequential.HashFileAsync(new FileInfo(localFile)).Result;
 
-                        if (alg.Hash.ToHashString() != stored.HashStr)
+                        if (hash.ToHashString() != stored.HashStr)
                         {
                             stored.State = SyncFileState.Modified;
                         }
@@ -356,13 +348,13 @@ namespace FileSync.Common
 
                 var localFileRelativePath = localFile.Replace(_baseDir, string.Empty);
 
-                using (HashAlgorithm alg = new MurmurHash3UnsafeProvider())
+
                 {
-                    alg.ComputeHash(File.OpenRead(localFile));
+                    var hash = NetworkHelperSequential.HashFileAsync(new FileInfo(localFile)).Result;
 
                     return new SyncFileInfo
                     {
-                        HashStr = alg.Hash.ToHashString(),
+                        HashStr = hash.ToHashString(),
                         RelativePath = localFileRelativePath,
                         AbsolutePath = localFile,
                         State = SyncFileState.New,

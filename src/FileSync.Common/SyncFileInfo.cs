@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Diagnostics;
 using System.Linq;
+using System.Text;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Converters;
 
@@ -41,7 +42,13 @@ namespace FileSync.Common
     {
         public static string ToHashString(this byte[] array)
         {
-            return string.Concat(array.Select(i => i.ToString("x2")));
+            var sb = new StringBuilder();
+            for (var i = 0; i < array.Length; ++i)
+            {
+                sb.Append(array[i].ToString("x2"));
+            }
+
+            return sb.ToString();
         }
     }
 

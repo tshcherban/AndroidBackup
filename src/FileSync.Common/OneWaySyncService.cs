@@ -42,18 +42,14 @@ namespace FileSync.Common
             var localFiles = Directory.GetFiles(session.BaseDir, "*", SearchOption.AllDirectories);
             var localInfos = localFiles.Select(i =>
             {
-                using (HashAlgorithm alg = new MurmurHash3UnsafeProvider())
-                using (var inputStream = File.OpenRead(i))
-                {
-                    alg.ComputeHash(inputStream);
+                var hash = NetworkHelperSequential.HashFileAsync(new FileInfo(i)).Result;
 
                     return new SyncFileInfo
                     {
-                        HashStr = alg.Hash.ToHashString(),
+                        HashStr = hash.ToHashString(),
                         RelativePath = i.Replace(session.BaseDir, string.Empty),
                         AbsolutePath = i,
                     };
-                }
             }).ToList();
 
             var ret = new SyncInfo();

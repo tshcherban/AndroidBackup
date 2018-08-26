@@ -60,15 +60,58 @@ namespace FileSync.Server
 
         private async Task StartHandleConnectionAsync1(TcpClient tcpClient)
         {
-            using (NetworkStream ns = tcpClient.GetStream())
+            using (var ns = tcpClient.GetStream())
             {
-                var fname = @"C:\shcherban\stest\file";
+                var fname = @"D:\Taras\test\file";
                 if (File.Exists(fname))
                 {
                     File.Delete(fname);
                 }
 
-                await NetworkHelper.ReadToFile(ns, fname, 131880010);
+                var fileLengthBytesCount = sizeof(long);
+                var fileLengthBytes = new byte[fileLengthBytesCount];
+
+                var read = await ns.ReadAsync(fileLengthBytes, 0, fileLengthBytesCount);
+                if (read != fileLengthBytesCount)
+                {
+                    throw new InvalidOperationException("Invalid data length read");
+                }
+
+                var fileLength = BitConverter.ToInt64(fileLengthBytes, 0);
+
+                var sw = Stopwatch.StartNew();
+
+                var hash = await NetworkHelperSequential.ReadToFileAndHashAsync(ns, fname, (int) fileLength);
+
+                sw.Stop();
+
+                var hashBuffer = new byte[sizeof(ulong)];
+
+                await ns.ReadAsync(hashBuffer, 0, sizeof(ulong));
+
+                var h1 = hash.ToHashString();
+                var h2 = hashBuffer.ToHashString();
+
+                Console.WriteLine($"{h1 == h2}, {(double) fileLength / 1024d / 1024d / sw.Elapsed.TotalSeconds:F2} mb/s");
+
+                var fs = new FileInfo(fname);
+
+                fileLengthBytes = BitConverter.GetBytes(fs.Length);
+                fileLengthBytesCount = sizeof(long);
+
+                await ns.WriteAsync(fileLengthBytes, 0, fileLengthBytesCount);
+
+                sw.Restart();
+
+                hash = await NetworkHelperSequential.WriteFromFileAndHashAsync(ns, fs.FullName, (int)fs.Length);
+
+                sw.Stop();
+
+                await ns.WriteAsync(hash, 0, sizeof(ulong));
+
+                Console.WriteLine($"{h1 == h2}, {(double)fileLength / 1024d / 1024d / sw.Elapsed.TotalSeconds:F2} mb/s");
+
+                Console.WriteLine("Client1 has disconnected");
             }
         }
 
@@ -137,71 +180,50 @@ namespace FileSync.Server
                 return;
             }
 
-            var fs = new FileInfo(@"C:\shcherban\shcherban.7z");
+            //var fs = new FileInfo(@"C:\shcherban\shcherban.7z");
+            //var fs = new FileInfo(@"D:\Summer Special Super Mix 2017 - Best Of Deep House Sessions Music 2017 Chill Out Mix by Drop G.mp4");
+            //var fs = new FileInfo(@"D:\JetBrains.ReSharperUltimate.2017.3.2.exe");
 
-            /*var h1 = TestHash(xxHash64Algo.Create(), fs.FullName, (int) fs.Length, BufferSizeMib * 1024 * 1024).Result;
-            var h2 = TestHash(xxHash64Algo.Create(), fs.FullName, (int) fs.Length, 133202).Result;
-
-            Console.WriteLine($"*****RESULT***** {h1 == h2}");
-
-            return;*/
-
-            //var h1 = TestHash(xxHash64Algo.Create(), fs.FullName, (int) fs.Length, BufferSizeMib * 1024 * 1024).Result;
-            //var h2 = TestHash(xxHash64Algo.Create(), fs.FullName, (int) fs.Length, 133202).Result;
-
-            var sww = Stopwatch.StartNew();
-            //using (var ff = fs.OpenRead())
-            const FileOptions fileFlagNoBuffering = (FileOptions)0x20000000;
+            /*const FileOptions fileFlagNoBuffering = (FileOptions)0x20000000;
             const FileOptions fileOptions = fileFlagNoBuffering | FileOptions.SequentialScan;
 
             const int chunkSize = BufferSizeMib * 1024 * 1024;
 
             var readBufferSize = chunkSize;
             readBufferSize += ((readBufferSize + 1023) & ~1023) - readBufferSize;
+            var sww = Stopwatch.StartNew();
 
-            using (var ff = new FileStream(fs.FullName, FileMode.Open, FileAccess.Read, FileShare.Read, readBufferSize))
+            byte[] hash1;
+
+            using (var f1 = new FileStream(fs.FullName, FileMode.Open, FileAccess.Read, FileShare.Read, readBufferSize, fileOptions))
+            using (var ff = new BufferedStream(f1, readBufferSize))
             {
-                var hash1 = XxHash64Managed.ComputeHash(ff, 133479, (int) fs.Length, (buffer, length) => Task.CompletedTask).Result;
-                var hash2 = XxHash64Managed.ComputeHash(ff, BufferSizeMib * 1024 * 1024, (int) fs.Length, (buffer, length) => Task.CompletedTask).Result;
-
-                Console.WriteLine(hash1 == hash2);
+                hash1 = XxHash64Callback.ComputeHash(ff, 133479, (int)fs.Length, (buffer, length) => Task.CompletedTask).Result;
             }
             sww.Stop();
 
-            Console.WriteLine($"***** {sww.Elapsed.TotalMilliseconds:F2} ms (speed - {(fs.Length / 1024.0m / 1024.0m) / (decimal) sww.Elapsed.TotalSeconds:F2} mb/s)");
+            Console.WriteLine($"{(fs.Length / 1024.0m / 1024.0m) / (decimal)sww.Elapsed.TotalSeconds:F2} mb/s)");
+            sww = Stopwatch.StartNew();
+
+            byte[] hash2;
+
+            using (var f1 = new FileStream(fs.FullName, FileMode.Open, FileAccess.Read, FileShare.Read, readBufferSize, fileOptions))
+            using (var ff = new BufferedStream(f1, readBufferSize))
+            {
+                hash2 = XxHash64Callback.ComputeHash(ff, BufferSizeMib * 1024 * 1024, (int)fs.Length, (buffer, length) => Task.CompletedTask).Result;
+            }
+            sww.Stop();
+
+            Console.WriteLine($"{(fs.Length / 1024.0m / 1024.0m) / (decimal)sww.Elapsed.TotalSeconds:F2} mb/s)");
+
+            Console.WriteLine(hash1.ToHashString() == hash2.ToHashString());
 
             //Console.WriteLine($"*****RESULT***** {h1 == h2}");
 
             Console.ReadLine();
 
-            return;
+            return;*/
 
-
-            /*
-             using (HashAlgorithm h = new MurmurHash3UnsafeProvider())
-            //using (HashAlgorithm h = SHA1.Create())
-            using (var f = File.OpenRead(@"D:\taras\stest\ghh.mp4"))
-            {
-                const int le = 133810;
-                var bf = new byte[le];
-                var left = f.Length;
-                for (; left > 0; )
-                {
-                    
-                    var toRead = (int)Math.Min(le, left);
-                    var read = f.Read(bf, 0, toRead);
-                    if (read == 0)
-                        throw null;
-
-                    left -= read;
-                    h.TransformBlock(bf, 0, read, null, -1);
-                }
-                var hh0 = h.TransformFinalBlock(bf, 0, 0).ToHashString();
-                var hh1 = h.Hash.ToHashString();
-            }
-
-            return;
-             */
             var program = new Program();
             program.StartListener();
             Console.WriteLine("Listening. Press return to quit");
@@ -254,7 +276,7 @@ namespace FileSync.Server
 
                     sw.Stop();
 
-                    Console.WriteLine($"***** {alg.GetType().Name} {sw.Elapsed.TotalMilliseconds:F2} ms (buffer - {chunkSize/1024m:F2} kbytes, speed - {(length / 1024.0m / 1024.0m) / (decimal) sw.Elapsed.TotalSeconds:F2} mb/s)");
+                    Console.WriteLine($"***** {alg.GetType().Name} {sw.Elapsed.TotalMilliseconds:F2} ms (buffer - {chunkSize / 1024m:F2} kbytes, speed - {(length / 1024.0m / 1024.0m) / (decimal) sw.Elapsed.TotalSeconds:F2} mb/s)");
 
                     return alg.Hash.ToHashString();
                 }
@@ -271,12 +293,11 @@ namespace FileSync.Server
                 {
                     try
                     {
-                        var clientRequestData = await server.ReceiveAsync();// (ref clientEp);
+                        var clientRequestData = await server.ReceiveAsync(); // (ref clientEp);
                         var clientRequest = Encoding.ASCII.GetString(clientRequestData.Buffer);
 
                         Console.WriteLine("Request from {0}, sending discover response", clientRequestData.RemoteEndPoint.Address);
                         await server.SendAsync(responseData, responseData.Length, clientRequestData.RemoteEndPoint);
-
                     }
                     catch (Exception e)
                     {

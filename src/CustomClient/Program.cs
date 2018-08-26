@@ -15,7 +15,6 @@ namespace FileSync.TestClient
             client.Log += Console.WriteLine;
             client.Sync().Wait();*/
 
-            var pr = new MurmurHash3UnsafeProvider();
             const FileOptions fileFlagNoBuffering = (FileOptions) 0x20000000;
             const FileOptions fileOptions = fileFlagNoBuffering | FileOptions.SequentialScan;
 
@@ -28,7 +27,6 @@ namespace FileSync.TestClient
 
             var sw = Stopwatch.StartNew();
 
-            using (HashAlgorithm hashAlgorithm = pr)
             using (var sourceStream = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.Read, readBufferSize, fileOptions))
             using (var bfs = new BufferedStream(sourceStream, readBufferSize))
             {
@@ -36,15 +34,9 @@ namespace FileSync.TestClient
 
                 var readSize = Convert.ToInt32(Math.Min(chunkSize, length));
 
-                var hash = hashAlgorithm.ComputeHash(bfs);
 
                 sw.Stop();
 
-                var ll = hash.Select(i => new {s = i, h = i.ToString("x2")}).ToList();
-
-
-                var str = hash.ToHashString().ToUpper();
-                Console.WriteLine(str);
 
                 
 
