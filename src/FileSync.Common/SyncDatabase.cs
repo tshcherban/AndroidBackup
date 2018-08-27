@@ -55,7 +55,7 @@ namespace FileSync.Common
                     return new SyncFileInfo
                     {
                         HashStr = hash.ToHashString(),
-                        RelativePath = i.Replace(baseDir, string.Empty),
+                        RelativePath = i.Replace(baseDir, string.Empty).TrimStart(Path.DirectorySeparatorChar),
                         AbsolutePath = i,
                         State = SyncFileState.New,
                     };
@@ -86,7 +86,7 @@ namespace FileSync.Common
             Files.Add(new SyncFileInfo
             {
                 HashStr = hash,
-                RelativePath = relativeFilePath,
+                RelativePath = relativeFilePath.TrimStart(Path.DirectorySeparatorChar),
                 AbsolutePath = Path.Combine(baseDir, relativeFilePath),
                 State = SyncFileState.NotChanged,
             });

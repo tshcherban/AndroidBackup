@@ -1,4 +1,5 @@
-﻿using System.Diagnostics;
+﻿using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using System.Net;
 using FileSync.Common;
@@ -9,6 +10,28 @@ namespace FileSync.Tests
     [TestClass]
     public class UnitTest1
     {
+        private readonly Dictionary<string, string> _paths = new Dictionary<string, string>
+        {
+            {@"C:\\dir1/file1.txt", @"C:\dir1\file1.txt"},
+            {@"C:\\dir1\file1.txt", @"C:\dir1\file1.txt"},
+            {@"C:\dir1\file1.txt", @"C:\dir1\file1.txt"},
+            {@"C:/dir1\file1.txt", @"C:\dir1\file1.txt"},
+            {@"C://dir1\file1.txt", @"C:\dir1\file1.txt"},
+            {@"C://dir1\\file1.txt", @"C:\dir1\file1.txt"},
+            {@"C://dir1\\/file1.txt", @"C:\dir1\file1.txt"},
+            {@"C://dir1/\file1.txt", @"C:\dir1\file1.txt"},
+            {@"C://dir1/\\file1.txt", @"C:\dir1\file1.txt"},
+        };
+
+        [TestMethod]
+        public void PathHelpers_Test1()
+        {
+            foreach (var i in _paths)
+            {
+                Assert.AreEqual(PathHelpers.Normalize(i.Key), i.Value);
+            }
+        }
+
         [TestMethod]
         public void GetMultipleSessions_WaitsAppropriateTime_Test()
         {

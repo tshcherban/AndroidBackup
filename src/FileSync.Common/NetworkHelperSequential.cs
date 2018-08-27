@@ -1,11 +1,6 @@
 ﻿using System;
-using System.Collections.Concurrent;
-using System.Collections.Generic;
-using System.Diagnostics;
 using System.IO;
-using System.Linq;
 using System.Net.Sockets;
-using System.Security.Cryptography;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -13,7 +8,7 @@ namespace FileSync.Common
 {
     public static class NetworkHelperSequential
     {
-        private const FileOptions FileFlagNoBuffering = (FileOptions)0x20000000;
+        private const FileOptions FileFlagNoBuffering = (FileOptions) 0x20000000;
         private const FileOptions FileOptions = FileFlagNoBuffering | System.IO.FileOptions.SequentialScan;
 
         private const int ChunkSize = 4 * 1024 * 1024;
@@ -82,7 +77,7 @@ namespace FileSync.Common
             return buffer;
         }
 
-        public static async Task<byte[]> ReadToFileAndHashAsync(Stream networkStream, string filePath, int fileLength)
+        public static async Task<byte[]> ReadToFileAndHashAsync(Stream networkStream, string filePath, long fileLength)
         {
             var folder = Path.GetDirectoryName(filePath);
             if (folder == null)
@@ -97,10 +92,10 @@ namespace FileSync.Common
 
             if (fileLength == 0)
             {
-                throw null;
+                return XxHash64Callback.EmptyHash;
             }
 
-            using (var fileStream = new FileStream(filePath, FileMode.CreateNew, FileAccess.Write, FileShare.None, ReadBufferSize, FileOptions.WriteThrough|FileOptions.Asynchronous))
+            using (var fileStream = new FileStream(filePath, FileMode.CreateNew, FileAccess.Write, FileShare.None, ReadBufferSize, FileOptions.WriteThrough | FileOptions.Asynchronous))
             {
                 async Task WriteToFile(byte[] bytes, int length)
                 {
@@ -125,12 +120,17 @@ namespace FileSync.Common
             }
         }
 
-        public static async Task<byte[]> HashFileAsync(FileInfo inf)
+        public static async Task<byte[]> HashFileAsync(string filePath)
         {
-            return await HashFileAsync(inf.FullName, (int) inf.Length);
+            return await HashFileAsync(new FileInfo(filePath));
         }
 
-        public static async Task<byte[]> HashFileAsync(string filePath, int fileLength)
+        public static async Task<byte[]> HashFileAsync(FileInfo inf)
+        {
+            return await HashFileAsync(inf.FullName, inf.Length);
+        }
+
+        private static async Task<byte[]> HashFileAsync(string filePath, long fileLength)
         {
             using (var fileStream = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.Read, ReadBufferSize, FileOptions))
             using (var bufferedStream = new BufferedStream(fileStream, ReadBufferSize))

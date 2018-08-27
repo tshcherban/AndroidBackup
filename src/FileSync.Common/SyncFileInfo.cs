@@ -1,6 +1,4 @@
 ﻿using System;
-using System.Diagnostics;
-using System.Linq;
 using System.Text;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Converters;
@@ -11,15 +9,10 @@ namespace FileSync.Common
     public sealed class SyncFileInfo
     {
         private string _absolutePath;
-        private string _relativePath;
 
         public string HashStr { get; set; }
 
-        public string RelativePath
-        {
-            get => _relativePath;
-            set => _relativePath = value?.Replace("\\", null);
-        }
+        public string RelativePath { get; set; }
 
         [JsonIgnore]
         public string AbsolutePath
@@ -27,9 +20,11 @@ namespace FileSync.Common
             get
             {
                 if (_absolutePath != null)
+                {
                     return _absolutePath;
-                Debugger.Break();
-                throw null;
+                }
+                
+                throw new InvalidOperationException("Absolute path was not set");
             }
             set => _absolutePath = value;
         }

@@ -3,7 +3,6 @@ using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Net.Sockets;
-using System.Security.Cryptography;
 using System.Threading.Tasks;
 
 namespace FileSync.Common
@@ -79,7 +78,7 @@ namespace FileSync.Common
                 else
                 {
                     // client disconnected
-                    Console.WriteLine($"Unexpected error but client already disconnected, ingoring...");
+                    Console.WriteLine("Unexpected error but client already disconnected, ignoring...");
                 }
             }
         }
@@ -98,7 +97,7 @@ namespace FileSync.Common
                     dirInfo.Attributes = dirInfo.Attributes | FileAttributes.Hidden;
                 }
 
-                var sessionDir = string.Empty;
+                string sessionDir;
                 var i = 1;
                 do
                 {
@@ -194,6 +193,10 @@ namespace FileSync.Common
 
                 var relative = f.Replace(session.NewDir, null).TrimStart(Path.DirectorySeparatorChar);
                 var fl = session.SyncDb.Files.FirstOrDefault(x => x.RelativePath == relative);
+                if (fl == null)
+                {
+                    Debugger.Break();
+                }
             }
         }
 
@@ -211,18 +214,19 @@ namespace FileSync.Common
             else if (session.Expired)
             {
                 ret.ErrorMsg = "Session has expired";
-                //Log?.Invoke("Session has expired");
-                //return ret;
+                Msg?.Invoke("Session has expired");
             }
             else
             {
+                data.RelativeFilePath = PathHelpers.Normalize(data.RelativeFilePath);
+
                 var filePath = Path.Combine(session.NewDir, data.RelativeFilePath);
 
                 Msg?.Invoke($"Receiving file '{data.RelativeFilePath}'");
 
                 var sw = Stopwatch.StartNew();
 
-                var newHash = await NetworkHelperSequential.ReadToFileAndHashAsync(_networkStream, filePath, (int)data.FileLength);
+                var newHash = await NetworkHelperSequential.ReadToFileAndHashAsync(_networkStream, filePath, data.FileLength);
 
                 sw.Stop();
 
@@ -259,6 +263,8 @@ namespace FileSync.Common
             }
             else
             {
+                data.RelativeFilePath = PathHelpers.Normalize(data.RelativeFilePath.TrimStart(Path.DirectorySeparatorChar));
+
                 var filePath = Path.Combine(session.BaseDir, data.RelativeFilePath);
                 var fileLength = new FileInfo(filePath).Length;
                 var fileLengthBytes = BitConverter.GetBytes(fileLength);
@@ -298,6 +304,11 @@ namespace FileSync.Common
                 {
                     var syncInfo = new SyncInfo();
 
+                    foreach (var i in data.Files)
+                    {
+                        i.RelativePath = PathHelpers.Normalize(i.RelativePath).TrimStart(Path.DirectorySeparatorChar);
+                    }
+
                     foreach (var localFileInfo in syncDb.Files)
                     {
                         var remoteFileInfo = data.Files.FirstOrDefault(remoteFile =>
@@ -321,6 +332,10 @@ namespace FileSync.Common
                                         {
                                             var movedFilePath = Path.Combine(session.RemovedDir, localFileInfo.RelativePath);
                                             var movedFileDir = Path.GetDirectoryName(movedFilePath);
+                                            if (movedFileDir == null)
+                                            {
+                                                throw new InvalidOperationException($"Unable to get '{movedFilePath}'s dir");
+                                            }
                                             if (!Directory.Exists(movedFileDir))
                                             {
                                                 Directory.CreateDirectory(movedFileDir);
@@ -447,7 +462,7 @@ namespace FileSync.Common
                     return new SyncFileInfo
                     {
                         HashStr = hash.ToHashString(),
-                        RelativePath = localFileRelativePath,
+                        RelativePath = localFileRelativePath.TrimStart(Path.DirectorySeparatorChar),
                         AbsolutePath = localFile,
                         State = SyncFileState.New,
                     };

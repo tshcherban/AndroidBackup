@@ -196,7 +196,7 @@ namespace FileSync.Android
 
                         sw.Restart();
 
-                        var receivedFileHash = await NetworkHelperSequential.HashFileAsync("/storage/emulated/0/stest/ghh1.mp4", (int)fileLength);
+                        var receivedFileHash = await NetworkHelperSequential.HashFileAsync("/storage/emulated/0/stest/ghh1.mp4");
 
                         sw.Stop();
 

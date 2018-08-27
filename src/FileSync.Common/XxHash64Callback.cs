@@ -7,6 +7,8 @@ namespace FileSync.Common
 {
     public static class XxHash64Callback
     {
+        public static byte[] EmptyHash = new byte[sizeof(ulong)];
+
         private const int Min64 = 1024;
         private const int Div32 = 0x7FFFFFE0;
 
@@ -16,7 +18,7 @@ namespace FileSync.Common
         private const ulong P4 = 9650029242287828579UL;
         private const ulong P5 = 2870177450012600261UL;
 
-        public static async Task<byte[]> ComputeHash(Stream stream, int bufferSize, int length, Func<byte[], int, Task> callback)
+        public static async Task<byte[]> ComputeHash(Stream stream, int bufferSize, long length, Func<byte[], int, Task> callback)
         {
             // The buffer can't be less than 1024 bytes
             if (bufferSize < Min64)
@@ -60,7 +62,7 @@ namespace FileSync.Common
             }
         }
 
-        private static async Task<byte[]> HashCore(Stream stream, int bufferSize, int chunks, int offset, byte[] buffer, long length, Func<byte[], int, Task> callback)
+        private static async Task<byte[]> HashCore(Stream stream, int bufferSize, long chunks, int offset, byte[] buffer, long length, Func<byte[], int, Task> callback)
         {
             // Prepare the seed vector
             var v1 = unchecked(P1 + P2);
@@ -74,7 +76,7 @@ namespace FileSync.Common
 
             // Process chunks
             // Skip the last chunk. It will processed a little bit later
-            for (var i = 2; i <= chunks; i++)
+            for (var i = 2L; i <= chunks; i++)
             {
                 // Change bufferSize for the last read
                 if (i == chunks)

@@ -5,6 +5,7 @@ using System.IO;
 using System.Linq;
 using System.Net;
 using System.Net.Sockets;
+using System.Text;
 using System.Threading.Tasks;
 
 namespace FileSync.Common
@@ -17,6 +18,7 @@ namespace FileSync.Common
         private readonly string _syncDbDir;
         private readonly string _toRemoveDir;
         private readonly string _newDir;
+        private readonly StringBuilder _log = new StringBuilder();
 
         private Guid _sessionId;
 
@@ -69,6 +71,11 @@ namespace FileSync.Common
                         {
                             Log?.Invoke($"Unable to get sync list. Server response was '{syncList.ErrorMsg}'");
                             return;
+                        }
+
+                        foreach (var f in syncList.Data.ToDownload.Concat(syncList.Data.ToUpload).Concat(syncList.Data.ToRemove))
+                        {
+                            f.RelativePath = PathHelpers.Normalize(f.RelativePath).TrimStart(Path.DirectorySeparatorChar);
                         }
 
                         if (!Directory.Exists(_toRemoveDir))
@@ -130,6 +137,8 @@ namespace FileSync.Common
 
                         syncDb.Store(_syncDbDir);
 
+                        File.WriteAllText(Path.Combine(_syncDbDir, $"sync-{DateTime.Now:dd-MM-yyyy_hh-mm-ss}.log"), _log.ToString());
+
                         await NetworkHelperSequential.WriteCommandHeader(networkStream, Commands.DisconnectCmd);
                     }
                 }
@@ -142,21 +151,31 @@ namespace FileSync.Common
 
         private void FinishLocalSession()
         {
-            foreach (var filePath in Directory.EnumerateFiles(_toRemoveDir))
+            foreach (var filePath in Directory.EnumerateFiles(_toRemoveDir, "*", SearchOption.AllDirectories))
             {
+                _log.AppendFormat("Removing '{0}'", filePath);
+                _log.AppendLine();
+
                 File.Delete(filePath);
             }
 
-            foreach (var filePath in Directory.EnumerateFiles(_newDir))
+            foreach (var filePath in Directory.EnumerateFiles(_newDir, "*", SearchOption.AllDirectories))
             {
-                var destinatinFilePath = filePath.Replace(_newDir, _baseDir);
+                var destinationFilePath = filePath.Replace(_newDir, _baseDir);
+                destinationFilePath = PathHelpers.Normalize(destinationFilePath);
 
-                if (File.Exists(destinatinFilePath))
+                _log.AppendFormat("Copying '{0}' to '{1}'", filePath, destinationFilePath);
+
+                if (File.Exists(destinationFilePath))
                 {
-                    File.Delete(destinatinFilePath);
+                    File.Delete(destinationFilePath);
+
+                    _log.Append(" (with replace)");
                 }
 
-                File.Move(filePath, destinatinFilePath);
+                _log.AppendLine();
+
+                File.Move(filePath, destinationFilePath);
             }
         }
 
@@ -213,6 +232,7 @@ namespace FileSync.Common
                     FileLength = fileLength,
                     SessionId = _sessionId,
                     RelativeFilePath = fileInfo.RelativePath,
+                    HashStr = syncDb.Files.First(x => x.RelativePath == fileInfo.RelativePath).HashStr,
                 };
                 var dataBytes = Serializer.Serialize(data);
                 await NetworkHelperSequential.WriteCommandHeader(networkStream, Commands.SendFileCmd, dataBytes.Length);
@@ -264,18 +284,14 @@ namespace FileSync.Common
                 {
                     fi = new SyncFileInfo
                     {
-                        HashStr = newHash.ToHashString(),
-                        RelativePath = fileInfo.RelativePath,
-                        State = SyncFileState.NotChanged,
+                        RelativePath = fileInfo.RelativePath.TrimStart(Path.DirectorySeparatorChar),
                     };
 
                     syncDb.Files.Add(fi);
                 }
-                else
-                {
-                    fi.HashStr = newHash.ToHashString();
-                    fi.State = SyncFileState.NotChanged;
-                }
+
+                fi.HashStr = newHash.ToHashString();
+                fi.State = SyncFileState.NotChanged;
             }
 
             return true;
@@ -346,8 +362,10 @@ namespace FileSync.Common
                     {
                         var hash = NetworkHelperSequential.HashFileAsync(new FileInfo(localFile)).Result;
 
-                        if (hash.ToHashString() != stored.HashStr)
+                        var hashString = hash.ToHashString();
+                        if (hashString != stored.HashStr)
                         {
+                            stored.HashStr = hashString;
                             stored.State = SyncFileState.Modified;
                         }
                     }
@@ -370,7 +388,7 @@ namespace FileSync.Common
                     return new SyncFileInfo
                     {
                         HashStr = hash.ToHashString(),
-                        RelativePath = localFileRelativePath,
+                        RelativePath = localFileRelativePath.TrimStart(Path.DirectorySeparatorChar),
                         AbsolutePath = localFile,
                         State = SyncFileState.New,
                     };

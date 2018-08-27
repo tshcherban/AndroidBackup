@@ -59,6 +59,8 @@ namespace FileSync.Common
 
         public string RelativeFilePath { get; set; }
 
+        public string HashStr { get; set; }
+
         public long FileLength { get; set; }
     }
 
