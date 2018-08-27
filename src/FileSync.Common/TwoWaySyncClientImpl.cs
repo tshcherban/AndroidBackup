@@ -98,6 +98,9 @@ namespace FileSync.Common
                             }
 
                             File.Move(filePath, movedFilePath);
+
+                            var fi = syncDb.Files.First(x => x.RelativePath == fileInfo.RelativePath);
+                            syncDb.Files.Remove(fi);
                         }
 
                         if (syncList.Data.Conflicts.Count > 0)
@@ -105,12 +108,12 @@ namespace FileSync.Common
                             Debugger.Break();
                         }
 
-                        if (!await ReceiveFiles(networkStream, syncList.Data.ToDownload))
+                        if (!await ReceiveFiles(networkStream, syncList.Data.ToDownload, syncDb))
                         {
                             return;
                         }
 
-                        if (!await SendFiles(networkStream, syncList.Data.ToUpload))
+                        if (!await SendFiles(networkStream, syncList.Data.ToUpload, syncDb))
                         {
                             return;
                         }
@@ -124,12 +127,6 @@ namespace FileSync.Common
                         }
 
                         FinishLocalSession();
-
-                        foreach (var file in syncDb.Files)
-                        {
-                            file.HashStr = (await NetworkHelperSequential.HashFileAsync(new FileInfo(file.AbsolutePath))).ToHashString();
-                            file.State = SyncFileState.NotChanged;
-                        }
 
                         syncDb.Store(_syncDbDir);
 
@@ -170,12 +167,12 @@ namespace FileSync.Common
             var cmdHeader = await NetworkHelperSequential.ReadCommandHeader(networkStream);
             if (cmdHeader.Command != Commands.GetSessionCmd)
             {
-                return new ServerResponseWithData<Guid> {ErrorMsg = "Wrong command received"};
+                return new ServerResponseWithData<Guid> { ErrorMsg = "Wrong command received" };
             }
 
             if (cmdHeader.PayloadLength == 0)
             {
-                return new ServerResponseWithData<Guid> {ErrorMsg = "No data received"};
+                return new ServerResponseWithData<Guid> { ErrorMsg = "No data received" };
             }
 
             var responseBytes = await NetworkHelperSequential.ReadBytes(networkStream, cmdHeader.PayloadLength);
@@ -193,10 +190,10 @@ namespace FileSync.Common
 
             var cmdHeader = await NetworkHelperSequential.ReadCommandHeader(networkStream);
             if (cmdHeader.Command != Commands.FinishSessionCmd)
-                return new ServerResponseWithData<SyncInfo> {ErrorMsg = "Wrong command received"};
+                return new ServerResponseWithData<SyncInfo> { ErrorMsg = "Wrong command received" };
 
             if (cmdHeader.PayloadLength == 0)
-                return new ServerResponseWithData<SyncInfo> {ErrorMsg = "No data received"};
+                return new ServerResponseWithData<SyncInfo> { ErrorMsg = "No data received" };
 
             var responseBytes = await NetworkHelperSequential.ReadBytes(networkStream, cmdHeader.PayloadLength);
             var response = Serializer.Deserialize<ServerResponse>(responseBytes);
@@ -204,7 +201,7 @@ namespace FileSync.Common
             return response;
         }
 
-        private async Task<bool> SendFiles(NetworkStream networkStream, List<SyncFileInfo> dataToUpload)
+        private async Task<bool> SendFiles(NetworkStream networkStream, List<SyncFileInfo> dataToUpload, SyncDatabase syncDb)
         {
             foreach (var fileInfo in dataToUpload)
             {
@@ -220,13 +217,13 @@ namespace FileSync.Common
                 var dataBytes = Serializer.Serialize(data);
                 await NetworkHelperSequential.WriteCommandHeader(networkStream, Commands.SendFileCmd, dataBytes.Length);
                 await NetworkHelperSequential.WriteBytes(networkStream, dataBytes);
-                await NetworkHelperSequential.WriteFromFileAndHashAsync(networkStream, filePath, (int) fileLength);
+                await NetworkHelperSequential.WriteFromFileAndHashAsync(networkStream, filePath, (int)fileLength);
             }
 
             return true;
         }
 
-        private async Task<bool> ReceiveFiles(Stream networkStream, IEnumerable<SyncFileInfo> dataToDownload)
+        private async Task<bool> ReceiveFiles(Stream networkStream, IEnumerable<SyncFileInfo> dataToDownload, SyncDatabase syncDb)
         {
             foreach (var fileInfo in dataToDownload)
             {
@@ -255,11 +252,29 @@ namespace FileSync.Common
                 var fileLength = BitConverter.ToInt64(fileLengthBytes, 0);
 
                 var tmpFilePath = Path.Combine(_newDir, fileInfo.RelativePath);
-                var newHash = await NetworkHelperSequential.ReadToFileAndHashAsync(networkStream, tmpFilePath, (int) fileLength);
+                var newHash = await NetworkHelperSequential.ReadToFileAndHashAsync(networkStream, tmpFilePath, (int)fileLength);
 
                 if (!string.Equals(newHash.ToHashString(), fileInfo.HashStr, StringComparison.OrdinalIgnoreCase))
                 {
                     throw new InvalidOperationException("File copy error: hash mismatch");
+                }
+
+                var fi = syncDb.Files.FirstOrDefault(x => x.RelativePath == fileInfo.RelativePath);
+                if (fi == null)
+                {
+                    fi = new SyncFileInfo
+                    {
+                        HashStr = newHash.ToHashString(),
+                        RelativePath = fileInfo.RelativePath,
+                        State = SyncFileState.NotChanged,
+                    };
+
+                    syncDb.Files.Add(fi);
+                }
+                else
+                {
+                    fi.HashStr = newHash.ToHashString();
+                    fi.State = SyncFileState.NotChanged;
                 }
             }
 
@@ -281,10 +296,10 @@ namespace FileSync.Common
 
             var cmdHeader = await NetworkHelperSequential.ReadCommandHeader(networkStream);
             if (cmdHeader.Command != Commands.GetSyncListCmd)
-                return new ServerResponseWithData<SyncInfo> {ErrorMsg = "Wrong command received"};
+                return new ServerResponseWithData<SyncInfo> { ErrorMsg = "Wrong command received" };
 
             if (cmdHeader.PayloadLength == 0)
-                return new ServerResponseWithData<SyncInfo> {ErrorMsg = "No data received"};
+                return new ServerResponseWithData<SyncInfo> { ErrorMsg = "No data received" };
 
             var responseBytes = await NetworkHelperSequential.ReadBytes(networkStream, cmdHeader.PayloadLength);
             var response = Serializer.Deserialize<ServerResponseWithData<SyncInfo>>(responseBytes);
