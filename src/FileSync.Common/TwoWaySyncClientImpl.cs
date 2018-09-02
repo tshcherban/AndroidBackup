@@ -73,10 +73,7 @@ namespace FileSync.Common
                             return;
                         }
 
-                        foreach (var f in syncList.Data.ToDownload.Concat(syncList.Data.ToUpload).Concat(syncList.Data.ToRemove))
-                        {
-                            f.RelativePath = PathHelpers.Normalize(f.RelativePath).TrimStart(Path.DirectorySeparatorChar);
-                        }
+                        PathHelpers.NormalizeRelative(syncList.Data.ToDownload, syncList.Data.ToUpload, syncList.Data.ToRemove);
 
                         if (!Directory.Exists(_toRemoveDir))
                         {

@@ -6,6 +6,17 @@ using System.Threading.Tasks;
 
 namespace FileSync.Common
 {
+    public static class CommandHelper
+    {
+        public static async Task WriteCommandResponse<T>(NetworkStream stream, byte command, T data)
+        {
+            var responseBytes = Serializer.Serialize(data);
+            var length = responseBytes.Length;
+            await NetworkHelperSequential.WriteCommandHeader(stream, Commands.FinishSessionCmd, length);
+            await NetworkHelperSequential.WriteBytes(stream, responseBytes);
+        }
+    }
+
     public static class NetworkHelperSequential
     {
         private const FileOptions FileFlagNoBuffering = (FileOptions) 0x20000000;
