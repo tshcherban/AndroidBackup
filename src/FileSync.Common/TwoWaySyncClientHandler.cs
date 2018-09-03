@@ -200,7 +200,7 @@ namespace FileSync.Common
             }
             else
             {
-                data.RelativeFilePath = PathHelpers.Normalize(data.RelativeFilePath);
+                data.RelativeFilePath = PathHelpers.NormalizeRelative(data.RelativeFilePath);
 
                 var filePath = Path.Combine(session.NewDir, data.RelativeFilePath);
 
@@ -212,7 +212,7 @@ namespace FileSync.Common
 
                 sw.Stop();
 
-                Msg?.Invoke($"Received file in {sw.Elapsed.TotalSeconds:F2} ({(decimal)data.FileLength / 1024.0m / 1024.0m / (decimal)sw.Elapsed.TotalSeconds:F2} mib/s)");
+                Msg?.Invoke($"Received file in {sw.Elapsed.TotalSeconds:F2} ({(decimal)data.FileLength / 1024m / 1024m / (decimal)sw.Elapsed.TotalSeconds:F2} mib/s)");
 
                 var fileInfo = session.SyncDb.Files.FirstOrDefault(i => i.RelativePath == data.RelativeFilePath);
                 if (fileInfo != null)

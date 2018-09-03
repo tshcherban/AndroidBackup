@@ -1,6 +1,7 @@
 ﻿using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Runtime.CompilerServices;
 using System.Text.RegularExpressions;
 
 namespace FileSync.Common
@@ -9,21 +10,28 @@ namespace FileSync.Common
     {
         private static readonly Regex Slashes = new Regex(@"[\\\/]+", RegexOptions.Compiled);
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static string Normalize(string path)
         {
             return Slashes.Replace(path, Path.DirectorySeparatorChar.ToString());
         }
 
-        public static void NormalizeRelative(params IEnumerable<SyncFileInfo>[] filelists)
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static string NormalizeRelative(string path)
         {
-            if (filelists.Length == 0)
+            return Slashes.Replace(path, Path.DirectorySeparatorChar.ToString()).TrimStart(Path.DirectorySeparatorChar);
+        }
+
+        public static void NormalizeRelative(params IEnumerable<SyncFileInfo>[] fileLists)
+        {
+            if (fileLists.Length == 0)
             {
                 return;
             }
 
-            foreach (var fi in filelists.SelectMany(x => x))
+            foreach (var fi in fileLists.SelectMany(x => x))
             {
-                fi.RelativePath = Normalize(fi.RelativePath).TrimStart(Path.DirectorySeparatorChar);
+                fi.RelativePath = NormalizeRelative(fi.RelativePath);
             }
         }
 
