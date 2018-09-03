@@ -1,5 +1,7 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 using System.Diagnostics;
+using System.IO;
 using System.Linq;
 using System.Net;
 using FileSync.Common;
@@ -29,6 +31,38 @@ namespace FileSync.Tests
             foreach (var i in _paths)
             {
                 Assert.AreEqual(PathHelpers.Normalize(i.Key), i.Value);
+            }
+        }
+
+        [TestMethod]
+        public void PathHelpers_Test2()
+        {
+            return;
+            var hashes = new HashSet<ulong>();
+            var collisions = new List<Tuple<ulong, int, byte>>();
+
+            var data = new byte[1048576];
+            for (var lengthIdx = 0; lengthIdx < data.Length; ++lengthIdx)
+            {
+                if (lengthIdx % 1000 == 0)
+                {
+                    Console.WriteLine($"{lengthIdx/1000} k");
+
+                }
+
+                for (byte byteIdx = 1; byteIdx < byte.MaxValue; ++byteIdx)
+                {
+                    data[lengthIdx] = byteIdx;
+                    using (var str = new MemoryStream(data))
+                    {
+                        var h = XxHash64Unsafe.ComputeHash(str);
+                        if (!hashes.Add(h))
+                        {
+                            Console.WriteLine("Collision found");
+                            collisions.Add(Tuple.Create(h, lengthIdx, byteIdx));
+                        }
+                    }
+                }
             }
         }
 
