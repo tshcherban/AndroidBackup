@@ -29,8 +29,6 @@ namespace FileSync.Common
 
         public SyncDatabase SyncDb { get; set; }
 
-        public string SessionRootDir { get; internal set; }
-
         public string RemovedDir { get; internal set; }
 
         public string NewDir { get; internal set; }

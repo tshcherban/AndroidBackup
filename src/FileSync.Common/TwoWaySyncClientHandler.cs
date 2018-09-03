@@ -97,23 +97,11 @@ namespace FileSync.Common
                     dirInfo.Attributes = dirInfo.Attributes | FileAttributes.Hidden;
                 }
 
-                string sessionDir;
-                var i = 1;
-                do
-                {
-                    sessionDir = Path.Combine(session.SyncDbDir, $"s{i}");
-                    ++i;
-                } while (Directory.Exists(sessionDir));
+                session.RemovedDir = Path.Combine(session.SyncDbDir, "rem");
+                PathHelpers.EnsureDirExists(session.RemovedDir);
 
-                Directory.CreateDirectory(sessionDir);
-
-                session.SessionRootDir = sessionDir;
-
-                session.RemovedDir = Path.Combine(session.SessionRootDir, "rem");
-                Directory.CreateDirectory(session.RemovedDir);
-
-                session.NewDir = Path.Combine(session.SessionRootDir, "new");
-                Directory.CreateDirectory(session.NewDir);
+                session.NewDir = Path.Combine(session.SyncDbDir, "new");
+                PathHelpers.EnsureDirExists(session.NewDir);
 
                 response.Data = session.Id;
             }
@@ -122,10 +110,7 @@ namespace FileSync.Common
                 response.ErrorMsg = e.ToString();
             }
 
-            var responseBytes = Serializer.Serialize(response);
-            var length = responseBytes.Length;
-            await NetworkHelperSequential.WriteCommandHeader(_networkStream, Commands.GetSessionCmd, length);
-            await NetworkHelperSequential.WriteBytes(_networkStream, responseBytes);
+            await CommandHelper.WriteCommandResponse(_networkStream, Commands.GetSessionCmd, response);
         }
 
         private async Task ProcessFinishSessionCmd(CommandHeader cmdHeader)
@@ -160,10 +145,7 @@ namespace FileSync.Common
                 session.SyncDb.Store(session.SyncDbDir);
             }
 
-            var responseBytes = Serializer.Serialize(response);
-            var length = responseBytes.Length;
-            await NetworkHelperSequential.WriteCommandHeader(_networkStream, Commands.FinishSessionCmd, length);
-            await NetworkHelperSequential.WriteBytes(_networkStream, responseBytes);
+            await CommandHelper.WriteCommandResponse(_networkStream, Commands.FinishSessionCmd, response);
         }
 
         private void FinishSession(Session session)
@@ -304,10 +286,7 @@ namespace FileSync.Common
                 {
                     var syncInfo = new SyncInfo();
 
-                    foreach (var i in data.Files)
-                    {
-                        i.RelativePath = PathHelpers.Normalize(i.RelativePath).TrimStart(Path.DirectorySeparatorChar);
-                    }
+                    PathHelpers.NormalizeRelative(data.Files);
 
                     foreach (var localFileInfo in syncDb.Files)
                     {
@@ -393,10 +372,7 @@ namespace FileSync.Common
                 }
             }
 
-            var responseBytes = Serializer.Serialize(ret);
-            var length = responseBytes.Length;
-            await NetworkHelperSequential.WriteCommandHeader(_networkStream, Commands.GetSyncListCmd, length);
-            await NetworkHelperSequential.WriteBytes(_networkStream, responseBytes);
+            await CommandHelper.WriteCommandResponse(_networkStream, Commands.GetSyncListCmd, ret);
         }
 
         private SyncDatabase GetSyncDb(string baseDir, string syncDbDir, out string error)
