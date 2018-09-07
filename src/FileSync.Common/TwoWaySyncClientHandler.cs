@@ -103,6 +103,10 @@ namespace FileSync.Common
                 session.NewDir = Path.Combine(session.SyncDbDir, "new");
                 PathHelpers.EnsureDirExists(session.NewDir);
 
+                var helper = new SessionFileHelper(session.NewDir, session.RemovedDir, session.BaseDir, new System.Text.StringBuilder());
+
+                session.FileHelper = helper;
+
                 response.Data = session.Id;
             }
             catch (Exception e)
@@ -218,6 +222,7 @@ namespace FileSync.Common
                 if (fileInfo != null)
                 {
                     fileInfo.HashStr = newHash.ToHashString();
+                    fileInfo.State = SyncFileState.NotChanged;
                 }
                 else
                 {
@@ -245,7 +250,7 @@ namespace FileSync.Common
             }
             else
             {
-                data.RelativeFilePath = PathHelpers.Normalize(data.RelativeFilePath.TrimStart(Path.DirectorySeparatorChar));
+                data.RelativeFilePath = PathHelpers.NormalizeRelative(data.RelativeFilePath);
 
                 var filePath = Path.Combine(session.BaseDir, data.RelativeFilePath);
                 var fileLength = new FileInfo(filePath).Length;
@@ -361,7 +366,7 @@ namespace FileSync.Common
                         }
                     }
 
-                    foreach (var remoteFileInfo in data.Files)
+                    foreach (var remoteFileInfo in data.Files.Where(x => x.State != SyncFileState.Deleted))
                     {
                         syncInfo.ToUpload.Add(remoteFileInfo);
                     }

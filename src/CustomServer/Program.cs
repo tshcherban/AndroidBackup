@@ -14,6 +14,9 @@ namespace FileSync.Server
     internal class Program
     {
         private const int Port = 9211;
+        //const string path = @"C:\shcherban\stest";
+        //const string path = @"H:\SyncTest\Dst";
+        private const string path = @"D:\taras\stest";
 
         private readonly object _lock = new object(); // sync lock 
         private readonly List<Task> _connections = new List<Task>(); // pending connections
@@ -154,10 +157,6 @@ namespace FileSync.Server
         private async Task HandleConnectionAsync(TcpClient tcpClient)
         {
             await Task.Yield();
-
-            //const string path = @"C:\shcherban\stest";
-            //const string path = @"H:\SyncTest\Dst";
-            const string path = @"D:\taras\stest";
 
             using (var clientHandler = new TwoWaySyncClientHandler(tcpClient, path))
             {

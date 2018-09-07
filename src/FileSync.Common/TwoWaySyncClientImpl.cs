@@ -19,6 +19,7 @@ namespace FileSync.Common
         private readonly string _toRemoveDir;
         private readonly string _newDir;
         private readonly StringBuilder _log = new StringBuilder();
+        private readonly SessionFileHelper _sessionFileHelper;
 
         private Guid _sessionId;
 
@@ -32,6 +33,7 @@ namespace FileSync.Common
             _syncDbDir = syncDbDir;
             _toRemoveDir = Path.Combine(syncDbDir, "ToRemove");
             _newDir = Path.Combine(syncDbDir, "New");
+            _sessionFileHelper = new SessionFileHelper(_newDir, _toRemoveDir, _baseDir, _log);
         }
 
         public async Task Sync()
@@ -75,33 +77,12 @@ namespace FileSync.Common
 
                         PathHelpers.NormalizeRelative(syncList.Data.ToDownload, syncList.Data.ToUpload, syncList.Data.ToRemove);
 
-                        if (!Directory.Exists(_toRemoveDir))
-                        {
-                            Directory.CreateDirectory(_toRemoveDir);
-                        }
-
-                        if (!Directory.Exists(_newDir))
-                        {
-                            Directory.CreateDirectory(_newDir);
-                        }
+                        PathHelpers.EnsureDirExists(_toRemoveDir);
+                        PathHelpers.EnsureDirExists(_newDir);
 
                         foreach (var fileInfo in syncList.Data.ToRemove)
                         {
-                            var filePath = Path.Combine(_baseDir, fileInfo.RelativePath);
-                            var movedFilePath = Path.Combine(_toRemoveDir, fileInfo.RelativePath);
-
-                            var movedFilePathDir = Path.GetDirectoryName(movedFilePath);
-                            if (movedFilePathDir == null)
-                            {
-                                throw new InvalidOperationException($"Unable to get '{movedFilePath}'s dir");
-                            }
-
-                            if (!Directory.Exists(movedFilePath))
-                            {
-                                Directory.CreateDirectory(movedFilePathDir);
-                            }
-
-                            File.Move(filePath, movedFilePath);
+                            _sessionFileHelper.PrepareForRemove(fileInfo.RelativePath);
 
                             var fi = syncDb.Files.First(x => x.RelativePath == fileInfo.RelativePath);
                             syncDb.Files.Remove(fi);
@@ -130,8 +111,9 @@ namespace FileSync.Common
                             return;
                         }
 
-                        FinishLocalSession();
+                        _sessionFileHelper.FinishSession();
 
+                        syncDb.Files.RemoveAll(x => x.State == SyncFileState.Deleted);
                         syncDb.Store(_syncDbDir);
 
                         File.WriteAllText(Path.Combine(_syncDbDir, $"sync-{DateTime.Now:dd-MM-yyyy_hh-mm-ss}.log"), _log.ToString());
@@ -143,36 +125,6 @@ namespace FileSync.Common
             catch (Exception e)
             {
                 Log?.Invoke($"Error during sync {e}");
-            }
-        }
-
-        private void FinishLocalSession()
-        {
-            foreach (var filePath in Directory.EnumerateFiles(_toRemoveDir, "*", SearchOption.AllDirectories))
-            {
-                _log.AppendFormat("Removing '{0}'", filePath);
-                _log.AppendLine();
-
-                File.Delete(filePath);
-            }
-
-            foreach (var filePath in Directory.EnumerateFiles(_newDir, "*", SearchOption.AllDirectories))
-            {
-                var destinationFilePath = filePath.Replace(_newDir, _baseDir);
-                destinationFilePath = PathHelpers.Normalize(destinationFilePath);
-
-                _log.AppendFormat("Copying '{0}' to '{1}'", filePath, destinationFilePath);
-
-                if (File.Exists(destinationFilePath))
-                {
-                    File.Delete(destinationFilePath);
-
-                    _log.Append(" (with replace)");
-                }
-
-                _log.AppendLine();
-
-                File.Move(filePath, destinationFilePath);
             }
         }
 
@@ -276,12 +228,14 @@ namespace FileSync.Common
                     throw new InvalidOperationException("File copy error: hash mismatch");
                 }
 
+                _sessionFileHelper.AddNew(fileInfo.RelativePath);
+
                 var fi = syncDb.Files.FirstOrDefault(x => x.RelativePath == fileInfo.RelativePath);
                 if (fi == null)
                 {
                     fi = new SyncFileInfo
                     {
-                        RelativePath = fileInfo.RelativePath.TrimStart(Path.DirectorySeparatorChar),
+                        RelativePath = fileInfo.RelativePath,
                     };
 
                     syncDb.Files.Add(fi);

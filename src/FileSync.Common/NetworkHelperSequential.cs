@@ -12,7 +12,7 @@ namespace FileSync.Common
         {
             var responseBytes = Serializer.Serialize(data);
             var length = responseBytes.Length;
-            await NetworkHelperSequential.WriteCommandHeader(stream, Commands.FinishSessionCmd, length);
+            await NetworkHelperSequential.WriteCommandHeader(stream, command, length);
             await NetworkHelperSequential.WriteBytes(stream, responseBytes);
         }
     }

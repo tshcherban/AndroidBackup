@@ -6,6 +6,8 @@ using System.Security.Cryptography;
 
 namespace FileSync.Common
 {
+    /*
+
     public interface IOneWaySyncService
     {
         Guid GetSession();
@@ -210,4 +212,6 @@ namespace FileSync.Common
             session.FoldersToRemove.AddRange(localFolders);
         }
     }
+
+    */
 }

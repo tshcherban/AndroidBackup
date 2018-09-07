@@ -21,10 +21,6 @@ namespace FileSync.Common
 
         public List<(string, string)> FilesForRename { get; } = new List<(string, string)>();
 
-        public List<string> FoldersToRemove { get; } = new List<string>();
-
-        public List<string> FoldersToAdd { get; } = new List<string>();
-
         public FileSession FileTransferSession { get; set; }
 
         public SyncDatabase SyncDb { get; set; }
@@ -32,5 +28,7 @@ namespace FileSync.Common
         public string RemovedDir { get; internal set; }
 
         public string NewDir { get; internal set; }
+
+        public SessionFileHelper FileHelper { get; set; }
     }
 }
