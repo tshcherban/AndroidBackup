@@ -77,7 +77,7 @@ namespace FileSync.Common
 
             foreach (var f in RemoveFiles)
             {
-                var oldFilePath = Path.Combine(_newDir, f);
+                var oldFilePath = Path.Combine(_toRemoveDir, f);
 
                 _log.AppendFormat("Removing {0}", oldFilePath);
                 _log.AppendLine();

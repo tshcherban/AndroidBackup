@@ -175,6 +175,9 @@ namespace FileSync.Common
                     File.Delete(target);
                 }
 
+                var targetDir = Path.GetDirectoryName(target);
+                PathHelpers.EnsureDirExists(targetDir);
+
                 File.Move(f, target);
 
                 var relative = f.Replace(session.NewDir, null).TrimStart(Path.DirectorySeparatorChar);
@@ -184,6 +187,20 @@ namespace FileSync.Common
                     Debugger.Break();
                 }
             }
+
+            if (new DirectoryInfo(session.NewDir).EnumerateFiles("*", SearchOption.AllDirectories).Any())
+            {
+                Debugger.Break(); // all files should be removed by now
+            }
+
+            if (new DirectoryInfo(session.RemovedDir).EnumerateFiles("*", SearchOption.AllDirectories).Any())
+            {
+                Debugger.Break(); // all files should be removed by now
+            }
+
+            Directory.Delete(session.NewDir, true);
+
+            Directory.Delete(session.RemovedDir, true);
         }
 
         private async Task ProcessSendFileCmd(CommandHeader cmdHeader)
@@ -208,6 +225,9 @@ namespace FileSync.Common
 
                 var filePath = Path.Combine(session.NewDir, data.RelativeFilePath);
 
+                var fileDir = Path.GetDirectoryName(filePath);
+                PathHelpers.EnsureDirExists(fileDir);
+
                 Msg?.Invoke($"Receiving file '{data.RelativeFilePath}'");
 
                 var sw = Stopwatch.StartNew();
@@ -216,7 +236,8 @@ namespace FileSync.Common
 
                 sw.Stop();
 
-                Msg?.Invoke($"Received file in {sw.Elapsed.TotalSeconds:F2} ({(decimal)data.FileLength / 1024m / 1024m / (decimal)sw.Elapsed.TotalSeconds:F2} mib/s)");
+                var speed = data.FileLength / 1024m / 1024m / (decimal)sw.Elapsed.TotalSeconds;
+                Msg?.Invoke($"Received file in {sw.Elapsed.TotalSeconds:F2} ({speed:F2} mib/s)");
 
                 var fileInfo = session.SyncDb.Files.FirstOrDefault(i => i.RelativePath == data.RelativeFilePath);
                 if (fileInfo != null)
@@ -252,12 +273,21 @@ namespace FileSync.Common
             {
                 data.RelativeFilePath = PathHelpers.NormalizeRelative(data.RelativeFilePath);
 
+                Msg?.Invoke($"Sending '{data.RelativeFilePath}'");
+
+                var sw = Stopwatch.StartNew();
+
                 var filePath = Path.Combine(session.BaseDir, data.RelativeFilePath);
                 var fileLength = new FileInfo(filePath).Length;
                 var fileLengthBytes = BitConverter.GetBytes(fileLength);
                 await NetworkHelperSequential.WriteCommandHeader(_networkStream, Commands.GetFileCmd, sizeof(long));
                 await NetworkHelperSequential.WriteBytes(_networkStream, fileLengthBytes);
                 await NetworkHelperSequential.WriteFromFileAndHashAsync(_networkStream, filePath, (int)fileLength);
+
+                sw.Stop();
+
+                var speed = fileLength / 1024m / 1024m / (decimal)sw.Elapsed.TotalSeconds;
+                Msg?.Invoke($"Sent in {sw.Elapsed.TotalSeconds:F2} ({speed:F2} mib/s)");
             }
         }
 
@@ -280,6 +310,8 @@ namespace FileSync.Common
             }
             else
             {
+                Msg?.Invoke("Scanning local folder...");
+
                 var syncDb = GetSyncDb(session.BaseDir, session.SyncDbDir, out var error);
                 if (syncDb == null)
                 {
@@ -292,6 +324,8 @@ namespace FileSync.Common
                     var syncInfo = new SyncInfo();
 
                     PathHelpers.NormalizeRelative(data.Files);
+
+                    Msg?.Invoke("Preparing sync list...");
 
                     foreach (var localFileInfo in syncDb.Files)
                     {
