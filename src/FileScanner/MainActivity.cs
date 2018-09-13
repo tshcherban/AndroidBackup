@@ -12,6 +12,7 @@ using Android.Text.Method;
 using Android.Views;
 using Android.Widget;
 using FileSync.Common;
+using FileSync.Common.Config;
 
 namespace FileSync.Android
 {
@@ -37,11 +38,14 @@ namespace FileSync.Android
 
         private readonly string _dataDir;
         private readonly string _clientConfigPath;
+        private SyncServiceConfigStore _configStore;
 
         public MainActivity()
         {
             _dataDir = System.Environment.GetFolderPath(System.Environment.SpecialFolder.Personal);
-            _clientConfigPath = Path.Combine(_dataDir, "client.json");
+            _clientConfigPath = "/sdcard/client.json";
+
+            _configStore = new SyncServiceConfigStore(_clientConfigPath);
         }
 
         protected override void OnCreate(Bundle savedInstanceState)
@@ -59,9 +63,7 @@ namespace FileSync.Android
             _syncBtn = FindViewById<Button>(Resource.Id.button1);
             _syncBtn.Click += SyncBtn_OnClick;
 
-            AppendLog($"personal folder '{_dataDir}'");
-
-            Task.Run(WaitAndDiscover);
+            //Task.Run(WaitAndDiscover);
         }
 
         private async Task WaitAndDiscover()
@@ -161,27 +163,27 @@ namespace FileSync.Android
                     return;
                 }
 
-                if (_discoverTask == null)
+                var config = _configStore.ReadClientOrDefault();
+                if (config.Pairs == null || config.Pairs.Count == 0)
                 {
-                    Toast.MakeText(this, "Wait for service discovery", ToastLength.Short).Show();
+                    Toast.MakeText(this, "No sync pair found.", ToastLength.Short).Show();
 
                     return;
                 }
 
-                AppendLog("Storage permission allowed. Waiting fow service discovery");
+                var pair = config.Pairs[0];
 
-                var endpoint = await _discoverTask;
-
-                AppendLog($"Discovered on {endpoint}. Starting sync...");
+                AppendLog($"Starting sync with {pair.ServerAddress}:{pair.ServerPort}...");
 
                 //const string dir = @"/mnt/sdcard";
-                const string dir = @"/storage/emulated/0/stest/";
+                //const string dir = @"/storage/emulated/0/stest/";
                 //const string dir = @"/storage/emulated/0/music/";
                 //const string dir = @"/storage/emulated/0/DCIM/";
 
-                var dbDir = Path.Combine(dir, @".sync/");
+                var baseDir = pair.BaseDir;
+                var dbDir = pair.DbDir;
 
-                var client = SyncClientFactory.GetTwoWay(endpoint.Address.ToString(), endpoint.Port, dir, dbDir);
+                var client = SyncClientFactory.GetTwoWay(pair.ServerAddress, int.Parse(pair.ServerPort), baseDir, dbDir);
 
                 client.Log += AppendLog;
 

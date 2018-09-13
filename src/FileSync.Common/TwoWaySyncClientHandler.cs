@@ -230,14 +230,7 @@ namespace FileSync.Common
 
                 Msg?.Invoke($"Receiving file '{data.RelativeFilePath}'");
 
-                var sw = Stopwatch.StartNew();
-
                 var newHash = await NetworkHelperSequential.ReadToFileAndHashAsync(_networkStream, filePath, data.FileLength);
-
-                sw.Stop();
-
-                var speed = data.FileLength / 1024m / 1024m / (decimal)sw.Elapsed.TotalSeconds;
-                Msg?.Invoke($"Received file in {sw.Elapsed.TotalSeconds:F2} ({speed:F2} mib/s)");
 
                 var fileInfo = session.SyncDb.Files.FirstOrDefault(i => i.RelativePath == data.RelativeFilePath);
                 if (fileInfo != null)
@@ -275,19 +268,12 @@ namespace FileSync.Common
 
                 Msg?.Invoke($"Sending '{data.RelativeFilePath}'");
 
-                var sw = Stopwatch.StartNew();
-
                 var filePath = Path.Combine(session.BaseDir, data.RelativeFilePath);
                 var fileLength = new FileInfo(filePath).Length;
                 var fileLengthBytes = BitConverter.GetBytes(fileLength);
                 await NetworkHelperSequential.WriteCommandHeader(_networkStream, Commands.GetFileCmd, sizeof(long));
                 await NetworkHelperSequential.WriteBytes(_networkStream, fileLengthBytes);
                 await NetworkHelperSequential.WriteFromFileAndHashAsync(_networkStream, filePath, (int)fileLength);
-
-                sw.Stop();
-
-                var speed = fileLength / 1024m / 1024m / (decimal)sw.Elapsed.TotalSeconds;
-                Msg?.Invoke($"Sent in {sw.Elapsed.TotalSeconds:F2} ({speed:F2} mib/s)");
             }
         }
 
@@ -316,8 +302,7 @@ namespace FileSync.Common
                 if (syncDb == null)
                 {
                     ret.ErrorMsg = error;
-                    //Log?.Invoke($"Failed to get sync db: {error}");
-                    //return ret;
+                    Msg?.Invoke($"Failed to get sync db: {error}");
                 }
                 else
                 {
@@ -333,7 +318,10 @@ namespace FileSync.Common
                             remoteFile.RelativePath == localFileInfo.RelativePath);
                         if (remoteFileInfo == null)
                         {
-                            syncInfo.ToDownload.Add(localFileInfo);
+                            if (localFileInfo.State != SyncFileState.Deleted)
+                            {
+                                syncInfo.ToDownload.Add(localFileInfo);
+                            }
                         }
                         else
                         {

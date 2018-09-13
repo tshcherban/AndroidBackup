@@ -67,14 +67,29 @@ namespace FileSync.Tests
 
             conf.Pairs.Add(new SyncPairConfigModel
             {
-                BaseDir = @"D:\Taras\stest",
-                DbDir = @"D:\Taras\stest\.sync",
+                BaseDir = @"/storage/emulated/0/stest",
+                DbDir = @"/storage/emulated/0/stest/.sync",
                 SyncMode = SyncMode.TwoWay,
                 ServerAddress = "127.0.0.2",
                 ServerPort = "-111",
             });
 
             store.Save(conf);
+        }
+
+        [TestMethod]
+        public void TwoWaySync_Test()
+        {
+            var server = new SyncServer(9211, @"D:\Taras\stest");
+
+            server.Msg += Console.WriteLine;
+
+            server.Start();
+
+            var client = SyncClientFactory.GetTwoWay("127.0.0.1", 9211, @"D:\Taras\stestsrc");
+            client.Sync().Wait();
+
+            server.Stop();
         }
 
         [TestMethod]

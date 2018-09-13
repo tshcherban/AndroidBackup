@@ -58,7 +58,7 @@ namespace FileSync.Common.Config
 
         public SyncServiceConfigModel ReadServiceOrDefault()
         {
-            return ReadFromFile(CreateDefaultServer);
+            return ReadFromFile(CreateDefaultForServer);
         }
 
         public SyncClientConfigModel ReadClientOrDefault()
@@ -66,7 +66,7 @@ namespace FileSync.Common.Config
             return ReadFromFile(CreateDefaultForClient);
         }
 
-        private SyncClientConfigModel CreateDefaultForClient()
+        private static SyncClientConfigModel CreateDefaultForClient()
         {
             return new SyncClientConfigModel
             {
@@ -74,14 +74,12 @@ namespace FileSync.Common.Config
             };
         }
 
-        private SyncServiceConfigModel CreateDefaultServer()
+        private static SyncServiceConfigModel CreateDefaultForServer()
         {
             return new SyncServiceConfigModel
             {
-                ServerConfig = new SyncServerConfigModel
-                {
-                    Port = 9211,
-                }
+                Endpoints = new List<SyncEndpointConfigModel>(),
+                ServerConfig = new SyncServerConfigModel(),
             };
         }
     }
