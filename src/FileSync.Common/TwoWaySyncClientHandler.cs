@@ -242,6 +242,7 @@ namespace FileSync.Common
                 {
                     session.SyncDb.AddFile(session.BaseDir, data.RelativeFilePath, newHash.ToHashString());
                 }
+                session.LastAccessTime = DateTime.Now;
             }
         }
 
@@ -274,6 +275,7 @@ namespace FileSync.Common
                 await NetworkHelperSequential.WriteCommandHeader(_networkStream, Commands.GetFileCmd, sizeof(long));
                 await NetworkHelperSequential.WriteBytes(_networkStream, fileLengthBytes);
                 await NetworkHelperSequential.WriteFromFileAndHashAsync(_networkStream, filePath, (int)fileLength);
+                session.LastAccessTime = DateTime.Now;
             }
         }
 
