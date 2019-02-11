@@ -13,6 +13,7 @@ using Android.Views;
 using Android.Widget;
 using FileSync.Common;
 using FileSync.Common.Config;
+using Task = System.Threading.Tasks.Task;
 
 namespace FileSync.Android
 {
@@ -39,6 +40,7 @@ namespace FileSync.Android
         private readonly string _dataDir;
         private readonly string _clientConfigPath;
         private SyncServiceConfigStore _configStore;
+        private Button _testBtn;
 
         public MainActivity()
         {
@@ -63,7 +65,15 @@ namespace FileSync.Android
             _syncBtn = FindViewById<Button>(Resource.Id.button1);
             _syncBtn.Click += SyncBtn_OnClick;
 
+            _testBtn = FindViewById<Button>(Resource.Id.button3);
+            _testBtn.Click += TestBtn_OnClick;
+
             //Task.Run(WaitAndDiscover);
+        }
+
+        private async void TestBtn_OnClick(object sender, EventArgs e)
+        {
+            await ClientDiscover();
         }
 
         private async Task WaitAndDiscover()
@@ -87,23 +97,33 @@ namespace FileSync.Android
                     var requestData = Encoding.ASCII.GetBytes("SomeRequestData");
 
                     client.EnableBroadcast = true;
-                    await client.SendAsync(requestData, requestData.Length, new IPEndPoint(IPAddress.Broadcast, 8888));
+                    var sendResult = await client.SendAsync(requestData, requestData.Length, new IPEndPoint(IPAddress.Broadcast, 8888)).WhenOrTimeout(10000);
+                    if (!sendResult.Item1)
+                    {
+                        AppendLog("Discovery request timeout");
+                        cts.SetResult(null);
+                        return;
+                    }
+                    var serverResponseData = await client.ReceiveAsync().WhenOrTimeout(10000);
+                    if (!serverResponseData.Item1)
+                    {
+                        AppendLog("Discovery response wait timeout");
+                        cts.SetResult(null);
+                        return;
+                    }
 
-                    var serverResponseData = await client.ReceiveAsync();
-                    var serverResponse = Encoding.ASCII.GetString(serverResponseData.Buffer);
+                    var serverResponse = Encoding.ASCII.GetString(serverResponseData.Item2.Buffer);
 
                     var port = int.Parse(serverResponse.Replace("port:", null));
 
-                    var ss = $"Discovered on {serverResponseData.RemoteEndPoint.Address}:{port}";
+                    var ss = $"Discovered on {serverResponseData.Item2.RemoteEndPoint.Address}:{port}";
 
                     AppendLog(ss);
 
-                    cts.SetResult(new IPEndPoint(serverResponseData.RemoteEndPoint.Address, port));
+                    cts.SetResult(new IPEndPoint(serverResponseData.Item2.RemoteEndPoint.Address, port));
 
-                    client.Close();
+                    AppendLog("Discover done");
                 }
-
-                AppendLog("Discover done");
             }
             catch (Exception e)
             {
@@ -163,15 +183,24 @@ namespace FileSync.Android
                     return;
                 }
 
-                var config = _configStore.ReadClientOrDefault();
+                /*var config = _configStore.ReadClientOrDefault();
                 if (config.Pairs == null || config.Pairs.Count == 0)
                 {
-                    Toast.MakeText(this, "No sync pair found.", ToastLength.Short).Show();
+                  //  Toast.MakeText(this, "No sync pair found.", ToastLength.Short).Show();
 
-                    return;
+                    //return;
                 }
+*/
 
-                var pair = config.Pairs[0];
+                //SyncPairConfigModel pair = config.Pairs[0];
+                SyncPairConfigModel pair = new SyncPairConfigModel
+                {
+                    BaseDir = "/storage/emulated/0/",
+                    DbDir = "/storage/emulated/0/db/",
+                    ServerAddress = "10.0.2.2",
+                    ServerPort = "9211",
+                    SyncMode = SyncMode.TwoWay,
+                };
 
                 AppendLog($"Starting sync with {pair.ServerAddress}:{pair.ServerPort}...");
 
@@ -193,6 +222,19 @@ namespace FileSync.Android
             {
                 _syncBtn.Enabled = true;
             }
+        }
+    }
+
+    public static class Extensions
+    {
+        public static async Task<Tuple<bool, T>> WhenOrTimeout<T>(this Task<T> task, int milliseconds)
+        {
+            var timeoutTask = Task.Delay(milliseconds);
+            var t = await Task.WhenAny(task, timeoutTask);
+            if (t == timeoutTask)
+                return Tuple.Create(false, default(T));
+
+            return Tuple.Create(true, task.Result);
         }
     }
 }

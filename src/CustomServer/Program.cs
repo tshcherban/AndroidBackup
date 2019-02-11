@@ -18,19 +18,6 @@ namespace FileSync.Server
 
         public static void Main(string[] args)
         {
-            if (args == null || args.Length == 0)
-            {
-                Console.WriteLine("args empty");
-
-                return;
-            }
-
-            Console.WriteLine(args.Length);
-
-            Console.WriteLine(string.Join("\r\n", args));
-
-            return;
-
             if (args?.Length > 0)
             {
                 Console.WriteLine("Unknown args, press any key to exit");
