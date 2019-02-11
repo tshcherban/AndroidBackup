@@ -5,6 +5,7 @@ using System.IO;
 using System.Linq;
 using System.Net;
 using FileSync.Common;
+using FileSync.Common.Config;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
 namespace FileSync.Tests
@@ -35,6 +36,63 @@ namespace FileSync.Tests
         }
 
         [TestMethod]
+        public void ServerConfig_Test()
+        {
+            var store = new SyncServiceConfigStore(@"D:\Taras\stest\main.json");
+            var conf = store.ReadServiceOrDefault();
+            if (conf.Endpoints == null)
+            {
+                conf.Endpoints = new List<SyncEndpointConfigModel>();
+            }
+
+            conf.Endpoints.Add(new SyncEndpointConfigModel
+            {
+                BaseDir = @"D:\Taras\stest",
+                DbDir = @"D:\Taras\stest\.sync",
+                SyncMode = SyncMode.TwoWay,
+            });
+
+            store.Save(conf);
+        }
+
+        [TestMethod]
+        public void ClientConfig_Test()
+        {
+            var store = new SyncServiceConfigStore(@"D:\Taras\stest\client.json");
+            var conf = store.ReadClientOrDefault();
+            if (conf.Pairs == null)
+            {
+                conf.Pairs = new List<SyncPairConfigModel>();
+            }
+
+            conf.Pairs.Add(new SyncPairConfigModel
+            {
+                BaseDir = @"/storage/emulated/0/stest",
+                DbDir = @"/storage/emulated/0/stest/.sync",
+                SyncMode = SyncMode.TwoWay,
+                ServerAddress = "127.0.0.2",
+                ServerPort = "-111",
+            });
+
+            store.Save(conf);
+        }
+
+        [TestMethod]
+        public void TwoWaySync_Test()
+        {
+            var server = new SyncServer(9211, @"D:\Taras\stest");
+
+            server.Msg += Console.WriteLine;
+
+            server.Start();
+
+            var client = SyncClientFactory.GetTwoWay("127.0.0.1", 9211, @"D:\Taras\stestsrc");
+            client.Sync().Wait();
+
+            server.Stop();
+        }
+
+        [TestMethod]
         public void PathHelpers_Test2()
         {
             return;
@@ -46,8 +104,7 @@ namespace FileSync.Tests
             {
                 if (lengthIdx % 1000 == 0)
                 {
-                    Console.WriteLine($"{lengthIdx/1000} k");
-
+                    Console.WriteLine($"{lengthIdx / 1000} k");
                 }
 
                 for (byte byteIdx = 1; byteIdx < byte.MaxValue; ++byteIdx)

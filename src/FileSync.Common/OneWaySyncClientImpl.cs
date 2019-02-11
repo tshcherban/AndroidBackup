@@ -1,4 +1,5 @@
 ﻿using System;
+using System.IO;
 using System.Threading.Tasks;
 
 namespace FileSync.Common
@@ -10,8 +11,13 @@ namespace FileSync.Common
             return new OneWaySyncClientImpl(serverAddress, serverPort, baseDir);
         }*/
 
-        public static ISyncClient GetTwoWay(string serverAddress, int serverPort, string baseDir, string syncDbDir)
+        public static ISyncClient GetTwoWay(string serverAddress, int serverPort, string baseDir, string syncDbDir = null)
         {
+            if (string.IsNullOrEmpty(syncDbDir))
+            {
+                syncDbDir = Path.Combine(baseDir, ".sync");
+            }
+
             return new TwoWaySyncClientImpl(serverAddress, serverPort, baseDir, syncDbDir);
         }
     }

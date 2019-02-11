@@ -118,6 +118,20 @@ namespace FileSync.Common
 
                         File.WriteAllText(Path.Combine(_syncDbDir, $"sync-{DateTime.Now:dd-MM-yyyy_hh-mm-ss}.log"), _log.ToString());
 
+                        if (new DirectoryInfo(_newDir).EnumerateFiles("*", SearchOption.AllDirectories).Any())
+                        {
+                            Debugger.Break(); // all files should be removed by now
+                        }
+
+                        if (new DirectoryInfo(_toRemoveDir).EnumerateFiles("*", SearchOption.AllDirectories).Any())
+                        {
+                            Debugger.Break(); // all files should be removed by now
+                        }
+
+                        Directory.Delete(_newDir, true);
+
+                        Directory.Delete(_toRemoveDir, true);
+
                         await NetworkHelperSequential.WriteCommandHeader(networkStream, Commands.DisconnectCmd);
                     }
                 }
