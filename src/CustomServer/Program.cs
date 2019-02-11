@@ -33,23 +33,25 @@ namespace FileSync.Server
 
             Console.WriteLine("Listening. Press return to quit");
 
+            Discover();
+
             while (Console.ReadKey().Key != ConsoleKey.Enter) ;
 
             server.Stop();
         }
 
-        /*private static async void Discover()
+        private static async void Discover()
         {
-            using (var server = new UdpClient(8888))
+            using (var server = new System.Net.Sockets.UdpClient(8888))
             {
-                var responseData = Encoding.ASCII.GetBytes($"port: {Port}");
+                var responseData = System.Text.Encoding.ASCII.GetBytes($"port: {Port}");
 
-                while (!_stop)
+                while (!false)
                 {
                     try
                     {
                         var clientRequestData = await server.ReceiveAsync(); // (ref clientEp);
-                        var clientRequest = Encoding.ASCII.GetString(clientRequestData.Buffer);
+                        var clientRequest = System.Text.Encoding.ASCII.GetString(clientRequestData.Buffer);
 
                         Console.WriteLine("Request from {0}, sending discover response", clientRequestData.RemoteEndPoint.Address);
                         await server.SendAsync(responseData, responseData.Length, clientRequestData.RemoteEndPoint);
@@ -60,6 +62,6 @@ namespace FileSync.Server
                     }
                 }
             }
-        }*/
+        }
     }
 }

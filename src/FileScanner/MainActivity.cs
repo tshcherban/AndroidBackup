@@ -6,8 +6,10 @@ using System.Text;
 using System.Threading.Tasks;
 using Android;
 using Android.App;
+using Android.Content;
 using Android.Content.PM;
 using Android.OS;
+using Android.Runtime;
 using Android.Text.Method;
 using Android.Views;
 using Android.Widget;
@@ -73,63 +75,27 @@ namespace FileSync.Android
 
         private async void TestBtn_OnClick(object sender, EventArgs e)
         {
-            await ClientDiscover();
+            StartActivityForResult(typeof(DiscoverServerActivity), 0);
+        }
+
+        protected override void OnActivityResult(int requestCode, [GeneratedEnum] Result resultCode, Intent data)
+        {
+            base.OnActivityResult(requestCode, resultCode, data);
+
+            if (resultCode == Result.Ok)
+            {
+                AppendLog(data.Extras.GetString("server"));
+            }
         }
 
         private async Task WaitAndDiscover()
         {
             await Task.Delay(2000);
 
-            await ClientDiscover();
+            //await ClientDiscover();
         }
 
-        private async Task ClientDiscover()
-        {
-            var cts = new TaskCompletionSource<IPEndPoint>();
-            _discoverTask = cts.Task;
-
-            try
-            {
-                AppendLog("Discovering...");
-
-                using (var client = new UdpClient())
-                {
-                    var requestData = Encoding.ASCII.GetBytes("SomeRequestData");
-
-                    client.EnableBroadcast = true;
-                    var sendResult = await client.SendAsync(requestData, requestData.Length, new IPEndPoint(IPAddress.Broadcast, 8888)).WhenOrTimeout(10000);
-                    if (!sendResult.Item1)
-                    {
-                        AppendLog("Discovery request timeout");
-                        cts.SetResult(null);
-                        return;
-                    }
-                    var serverResponseData = await client.ReceiveAsync().WhenOrTimeout(10000);
-                    if (!serverResponseData.Item1)
-                    {
-                        AppendLog("Discovery response wait timeout");
-                        cts.SetResult(null);
-                        return;
-                    }
-
-                    var serverResponse = Encoding.ASCII.GetString(serverResponseData.Item2.Buffer);
-
-                    var port = int.Parse(serverResponse.Replace("port:", null));
-
-                    var ss = $"Discovered on {serverResponseData.Item2.RemoteEndPoint.Address}:{port}";
-
-                    AppendLog(ss);
-
-                    cts.SetResult(new IPEndPoint(serverResponseData.Item2.RemoteEndPoint.Address, port));
-
-                    AppendLog("Discover done");
-                }
-            }
-            catch (Exception e)
-            {
-                AppendLog($"Error while discovering\r\n{e}");
-            }
-        }
+        
 
         private void AppendLog(string msg)
         {
@@ -186,9 +152,9 @@ namespace FileSync.Android
                 /*var config = _configStore.ReadClientOrDefault();
                 if (config.Pairs == null || config.Pairs.Count == 0)
                 {
-                  //  Toast.MakeText(this, "No sync pair found.", ToastLength.Short).Show();
+                    Toast.MakeText(this, "No sync pair found.", ToastLength.Short).Show();
 
-                    //return;
+                    return;
                 }
 */
 
@@ -202,15 +168,13 @@ namespace FileSync.Android
                     SyncMode = SyncMode.TwoWay,
                 };
 
-                AppendLog($"Starting sync with {pair.ServerAddress}:{pair.ServerPort}...");
-
                 //const string dir = @"/mnt/sdcard";
                 //const string dir = @"/storage/emulated/0/stest/";
-                //const string dir = @"/storage/emulated/0/music/";
+                const string dir = @"/storage/emulated/0/Download/";
                 //const string dir = @"/storage/emulated/0/DCIM/";
 
-                var baseDir = pair.BaseDir;
-                var dbDir = pair.DbDir;
+                var baseDir = dir;
+                var dbDir = dir + ".sync/";
 
                 var client = SyncClientFactory.GetTwoWay(pair.ServerAddress, int.Parse(pair.ServerPort), baseDir, dbDir);
 

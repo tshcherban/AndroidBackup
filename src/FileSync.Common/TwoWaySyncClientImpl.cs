@@ -185,8 +185,11 @@ namespace FileSync.Common
 
         private async Task<bool> SendFiles(NetworkStream networkStream, List<SyncFileInfo> dataToUpload, SyncDatabase syncDb)
         {
+            Log?.Invoke($"Going to upload {dataToUpload.Count} files");
+            var done = 1;
             foreach (var fileInfo in dataToUpload)
             {
+                Log?.Invoke($"Uploading {done++}");
                 var filePath = Path.Combine(_baseDir, fileInfo.RelativePath);
                 var fileLength = new FileInfo(filePath).Length;
 
