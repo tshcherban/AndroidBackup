@@ -93,8 +93,6 @@ namespace FileSync.Common.Config
     {
         public string ServerAddress { get; set; }
 
-        public string ServerPort { get; set; }
-
         public string BaseDir { get; set; }
 
         public string DbDir { get; set; }

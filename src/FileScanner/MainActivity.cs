@@ -1,8 +1,4 @@
 ﻿using System;
-using System.IO;
-using System.Net;
-using System.Net.Sockets;
-using System.Text;
 using System.Threading.Tasks;
 using Android;
 using Android.App;
@@ -15,6 +11,7 @@ using Android.Views;
 using Android.Widget;
 using FileSync.Common;
 using FileSync.Common.Config;
+using Extensions = FileSync.Common.Extensions;
 using Task = System.Threading.Tasks.Task;
 
 namespace FileSync.Android
@@ -32,9 +29,7 @@ namespace FileSync.Android
 
         private TextView _logTextView;
 
-        private Task<IPEndPoint> _discoverTask;
-
-        private const int RequestId = 1;
+        private const int RequestId = 244;
 
         private TaskCompletionSource<bool> _requestPermissionsTaskCompletionSource;
         private Button _syncBtn;
@@ -69,11 +64,9 @@ namespace FileSync.Android
 
             _testBtn = FindViewById<Button>(Resource.Id.button3);
             _testBtn.Click += TestBtn_OnClick;
-
-            //Task.Run(WaitAndDiscover);
         }
 
-        private async void TestBtn_OnClick(object sender, EventArgs e)
+        private void TestBtn_OnClick(object sender, EventArgs e)
         {
             StartActivityForResult(typeof(DiscoverServerActivity), 0);
         }
@@ -87,15 +80,6 @@ namespace FileSync.Android
                 AppendLog(data.Extras.GetString("server"));
             }
         }
-
-        private async Task WaitAndDiscover()
-        {
-            await Task.Delay(2000);
-
-            //await ClientDiscover();
-        }
-
-        
 
         private void AppendLog(string msg)
         {
@@ -159,24 +143,21 @@ namespace FileSync.Android
 */
 
                 //SyncPairConfigModel pair = config.Pairs[0];
-                SyncPairConfigModel pair = new SyncPairConfigModel
-                {
-                    BaseDir = "/storage/emulated/0/",
-                    DbDir = "/storage/emulated/0/db/",
-                    ServerAddress = "10.0.2.2",
-                    ServerPort = "9211",
-                    SyncMode = SyncMode.TwoWay,
-                };
 
                 //const string dir = @"/mnt/sdcard";
                 //const string dir = @"/storage/emulated/0/stest/";
                 const string dir = @"/storage/emulated/0/Download/";
                 //const string dir = @"/storage/emulated/0/DCIM/";
 
-                var baseDir = dir;
-                var dbDir = dir + ".sync/";
+                var pair = new SyncPairConfigModel
+                {
+                    BaseDir = dir,
+                    DbDir = dir + ".sync",
+                    ServerAddress = "10.0.2.2:9211",
+                    SyncMode = SyncMode.TwoWay,
+                };
 
-                var client = SyncClientFactory.GetTwoWay(pair.ServerAddress, int.Parse(pair.ServerPort), baseDir, dbDir);
+                var client = SyncClientFactory.GetTwoWay(Extensions.ParseEndpoint(pair.ServerAddress), pair.BaseDir, pair.DbDir);
 
                 client.Log += AppendLog;
 
@@ -186,19 +167,6 @@ namespace FileSync.Android
             {
                 _syncBtn.Enabled = true;
             }
-        }
-    }
-
-    public static class Extensions
-    {
-        public static async Task<Tuple<bool, T>> WhenOrTimeout<T>(this Task<T> task, int milliseconds)
-        {
-            var timeoutTask = Task.Delay(milliseconds);
-            var t = await Task.WhenAny(task, timeoutTask);
-            if (t == timeoutTask)
-                return Tuple.Create(false, default(T));
-
-            return Tuple.Create(true, task.Result);
         }
     }
 }

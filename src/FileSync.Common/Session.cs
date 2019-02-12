@@ -19,7 +19,7 @@ namespace FileSync.Common
 
         public List<(string, string)> FilesForDeletion { get; } = new List<(string, string)>();
 
-        public List<(string, string)> FilesForRename { get; } = new List<(string, string)>();
+        public List<(string oldPath, string newPath)> FilesForRename { get; } = new List<(string, string)>();
 
         public FileSession FileTransferSession { get; set; }
 

@@ -12,8 +12,9 @@ namespace FileSync.Common
 {
     internal sealed class TwoWaySyncClientImpl : ISyncClient
     {
-        private readonly string _serverAddress;
-        private readonly int _serverPort;
+        private const int OperationsTimeout = 15000;
+
+        private readonly IPEndPoint _endpoint;
         private readonly string _baseDir;
         private readonly string _syncDbDir;
         private readonly string _toRemoveDir;
@@ -25,10 +26,9 @@ namespace FileSync.Common
 
         public event Action<string> Log;
 
-        public TwoWaySyncClientImpl(string serverAddress, int serverPort, string baseDir, string syncDbDir)
+        public TwoWaySyncClientImpl(IPEndPoint endpoint, string baseDir, string syncDbDir)
         {
-            _serverAddress = serverAddress;
-            _serverPort = serverPort;
+            _endpoint = endpoint;
             _baseDir = baseDir;
             _syncDbDir = syncDbDir;
             _toRemoveDir = Path.Combine(syncDbDir, "ToRemove");
@@ -40,9 +40,14 @@ namespace FileSync.Common
         {
             try
             {
-                using (var client = new TcpClient())
+                using (var client = new TcpClient{ReceiveTimeout = OperationsTimeout, SendTimeout = OperationsTimeout})
                 {
-                    await client.ConnectAsync(IPAddress.Parse(_serverAddress), _serverPort);
+                    var success = await client.ConnectAsync(_endpoint.Address, _endpoint.Port).WhenOrTimeout(OperationsTimeout);
+                    if (!success)
+                    {
+                        Log?.Invoke("Connecting to server timed out");
+                        return;
+                    }
 
                     using (var networkStream = client.GetStream())
                     {
@@ -103,7 +108,7 @@ namespace FileSync.Common
                             return;
                         }
 
-                        var response = await FinishSession(networkStream, _sessionId);
+                        var response = await FinishServerSession(networkStream, _sessionId);
                         if (response.HasError)
                         {
                             Log?.Invoke($"Error finishing session. Server response was '{response.ErrorMsg}'");
@@ -114,6 +119,23 @@ namespace FileSync.Common
                         _sessionFileHelper.FinishSession();
 
                         syncDb.Files.RemoveAll(x => x.State == SyncFileState.Deleted);
+
+                        foreach (var tu in syncList.Data.ToUpload.Where(x => !string.IsNullOrEmpty(x.NewRelativePath)))
+                        {
+                            var fi = syncDb.Files.FirstOrDefault(x => x.RelativePath == tu.RelativePath);
+                            if (fi != null)
+                            {
+                                fi.RelativePath = tu.NewRelativePath;
+                            }
+                            else
+                                Debugger.Break();
+                        }
+
+                        foreach (var f in syncDb.Files)
+                        {
+                            f.State = SyncFileState.NotChanged;
+                        }
+
                         syncDb.Store(_syncDbDir);
 
                         File.WriteAllText(Path.Combine(_syncDbDir, $"sync-{DateTime.Now:dd-MM-yyyy_hh-mm-ss}.log"), _log.ToString());
@@ -163,7 +185,7 @@ namespace FileSync.Common
             return response;
         }
 
-        private async Task<ServerResponse> FinishSession(Stream networkStream, Guid sessionId)
+        private async Task<ServerResponse> FinishServerSession(Stream networkStream, Guid sessionId)
         {
             var cmdDataBytes = Serializer.Serialize(sessionId);
 
@@ -193,17 +215,22 @@ namespace FileSync.Common
                 var filePath = Path.Combine(_baseDir, fileInfo.RelativePath);
                 var fileLength = new FileInfo(filePath).Length;
 
+                if (!string.IsNullOrEmpty(fileInfo.NewRelativePath))
+                {
+                    _sessionFileHelper.AddRename(fileInfo.RelativePath, fileInfo.NewRelativePath);
+                }
+
                 var data = new SendFileCommandData
                 {
                     FileLength = fileLength,
                     SessionId = _sessionId,
-                    RelativeFilePath = fileInfo.RelativePath,
+                    RelativeFilePath = fileInfo.NewRelativePath ?? fileInfo.RelativePath,
                     HashStr = syncDb.Files.First(x => x.RelativePath == fileInfo.RelativePath).HashStr,
                 };
                 var dataBytes = Serializer.Serialize(data);
                 await NetworkHelperSequential.WriteCommandHeader(networkStream, Commands.SendFileCmd, dataBytes.Length);
                 await NetworkHelperSequential.WriteBytes(networkStream, dataBytes);
-                await NetworkHelperSequential.WriteFromFileAndHashAsync(networkStream, filePath, (int)fileLength);
+                await NetworkHelperSequential.WriteFromFileAndHashAsync(networkStream, filePath, (int) fileLength);
             }
 
             return true;
@@ -237,7 +264,8 @@ namespace FileSync.Common
                 var fileLengthBytes = await NetworkHelperSequential.ReadBytes(networkStream, cmdHeader.PayloadLength);
                 var fileLength = BitConverter.ToInt64(fileLengthBytes, 0);
 
-                var tmpFilePath = Path.Combine(_newDir, fileInfo.RelativePath);
+                var downloadedFileRelativePath = fileInfo.NewRelativePath ?? fileInfo.RelativePath;
+                var tmpFilePath = Path.Combine(_newDir, downloadedFileRelativePath);
                 var newHash = await NetworkHelperSequential.ReadToFileAndHashAsync(networkStream, tmpFilePath, (int)fileLength);
 
                 if (!string.Equals(newHash.ToHashString(), fileInfo.HashStr, StringComparison.OrdinalIgnoreCase))
@@ -245,17 +273,22 @@ namespace FileSync.Common
                     throw new InvalidOperationException("File copy error: hash mismatch");
                 }
 
-                _sessionFileHelper.AddNew(fileInfo.RelativePath);
+                _sessionFileHelper.AddNew(downloadedFileRelativePath);
 
                 var fi = syncDb.Files.FirstOrDefault(x => x.RelativePath == fileInfo.RelativePath);
-                if (fi == null)
+                if (fi == null || !string.IsNullOrEmpty(fileInfo.NewRelativePath))
                 {
                     fi = new SyncFileInfo
                     {
-                        RelativePath = fileInfo.RelativePath,
+                        RelativePath = downloadedFileRelativePath,
                     };
 
                     syncDb.Files.Add(fi);
+                }
+                else
+                {
+                    fi.RelativePath = downloadedFileRelativePath;
+                    fi.NewRelativePath = null;
                 }
 
                 fi.HashStr = newHash.ToHashString();
@@ -357,7 +390,6 @@ namespace FileSync.Common
                     {
                         HashStr = hash.ToHashString(),
                         RelativePath = localFileRelativePath.TrimStart(Path.DirectorySeparatorChar),
-                        AbsolutePath = localFile,
                         State = SyncFileState.New,
                     };
                 }

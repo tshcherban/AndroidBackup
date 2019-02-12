@@ -70,8 +70,7 @@ namespace FileSync.Tests
                 BaseDir = @"/storage/emulated/0/stest",
                 DbDir = @"/storage/emulated/0/stest/.sync",
                 SyncMode = SyncMode.TwoWay,
-                ServerAddress = "127.0.0.2",
-                ServerPort = "-111",
+                ServerAddress = "127.0.0.2:-111",
             });
 
             store.Save(conf);
@@ -86,7 +85,7 @@ namespace FileSync.Tests
 
             server.Start();
 
-            var client = SyncClientFactory.GetTwoWay("127.0.0.1", 9211, @"D:\Taras\stestsrc");
+            var client = SyncClientFactory.GetTwoWay(new IPEndPoint(IPAddress.Parse("127.0.0.1"), 9211), @"D:\Taras\stestsrc");
             client.Sync().Wait();
 
             server.Stop();

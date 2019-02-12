@@ -18,7 +18,7 @@
     <AndroidUseApkSigner>False</AndroidUseApkSigner>
     <GenerateSerializationAssemblies>Off</GenerateSerializationAssemblies>
     <AndroidUseLatestPlatformSdk>false</AndroidUseLatestPlatformSdk>
-    <TargetFrameworkVersion>v8.1</TargetFrameworkVersion>
+    <TargetFrameworkVersion>v9.0</TargetFrameworkVersion>
     <AndroidManifest>Properties\AndroidManifest.xml</AndroidManifest>
     <MonoAndroidResourcePrefix>Resources</MonoAndroidResourcePrefix>
     <MonoAndroidAssetsPrefix>Assets</MonoAndroidAssetsPrefix>
@@ -44,6 +44,7 @@
     <AndroidCreatePackagePerAbi>true</AndroidCreatePackagePerAbi>
     <AndroidUseSharedRuntime>true</AndroidUseSharedRuntime>
     <EmbedAssembliesIntoApk>false</EmbedAssembliesIntoApk>
+    <LangVersion>7.3</LangVersion>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)' == 'Release|x64'">
     <DebugSymbols>false</DebugSymbols>
@@ -78,6 +79,7 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="DiscoverServerActivity.cs" />
+    <Compile Include="FileSyncApp.cs" />
     <Compile Include="Helpers\ServerDiscoveryController.cs" />
     <Compile Include="MainActivity.cs" />
     <Compile Include="Resources\Resource.Designer.cs" />

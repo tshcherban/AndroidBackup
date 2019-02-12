@@ -11,8 +11,9 @@ namespace FileSync.Common
         private readonly string _toRemoveDir;
         private readonly string _baseDir;
         private readonly StringBuilder _log;
-        private readonly List<string> NewFiles;
-        private readonly List<string> RemoveFiles;
+        private readonly List<string> _newFiles;
+        private readonly List<string> _removeFiles;
+        private readonly List<(string oldPath, string newPath)> _renameFiles;
 
         public SessionFileHelper(string newDir, string toRemoveDir, string baseDir, StringBuilder log)
         {
@@ -20,18 +21,19 @@ namespace FileSync.Common
             _toRemoveDir = toRemoveDir;
             _baseDir = baseDir;
             _log = log;
-            NewFiles = new List<string>();
-            RemoveFiles = new List<string>();
+            _newFiles = new List<string>();
+            _removeFiles = new List<string>();
+            _renameFiles = new List<(string, string)>();
         }
 
         public void AddNew(string relativePath)
         {
-            NewFiles.Add(relativePath);
+            _newFiles.Add(relativePath);
         }
 
         public void AddRemove(string relativePath)
         {
-            RemoveFiles.Add(relativePath);
+            _removeFiles.Add(relativePath);
         }
 
         public void PrepareForRemove(string relativePath)
@@ -49,12 +51,12 @@ namespace FileSync.Common
 
             File.Move(filePath, movedFilePath);
 
-            RemoveFiles.Add(relativePath);
+            _removeFiles.Add(relativePath);
         }
 
         public void FinishSession()
         {
-            foreach (var f in NewFiles)
+            foreach (var f in _newFiles)
             {
                 var oldFilePath = Path.Combine(_newDir, f);
                 var newFilePath = Path.Combine(_baseDir, f);
@@ -75,7 +77,7 @@ namespace FileSync.Common
                 File.Move(oldFilePath, newFilePath);
             }
 
-            foreach (var f in RemoveFiles)
+            foreach (var f in _removeFiles)
             {
                 var oldFilePath = Path.Combine(_toRemoveDir, f);
 
@@ -84,6 +86,19 @@ namespace FileSync.Common
 
                 File.Delete(oldFilePath);
             }
+
+            foreach (var (oldPath, newPath) in _renameFiles)
+            {
+                _log.AppendFormat("Renaming {0} to {1}", oldPath, newPath);
+                var o = Path.Combine(_baseDir, oldPath);
+                var n = Path.Combine(_baseDir, newPath);
+                File.Move(o, n);
+            }
+        }
+
+        public void AddRename(string oldPath, string newPath)
+        {
+            _renameFiles.Add((oldPath, newPath));
         }
     }
 }

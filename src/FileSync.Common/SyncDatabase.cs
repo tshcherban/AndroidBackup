@@ -26,7 +26,6 @@ namespace FileSync.Common
                 var db = JsonConvert.DeserializeObject<SyncDatabase>(File.ReadAllText(fileName));
                 foreach (var f in db.Files)
                 {
-                    f.AbsolutePath = Path.Combine(baseDir, f.RelativePath);
                     f.State = SyncFileState.NotChanged;
                 }
                 return db;
@@ -56,7 +55,6 @@ namespace FileSync.Common
                     {
                         HashStr = hash.ToHashString(),
                         RelativePath = i.Replace(baseDir, string.Empty).TrimStart(Path.DirectorySeparatorChar),
-                        AbsolutePath = i,
                         State = SyncFileState.New,
                     };
                 }
@@ -87,7 +85,6 @@ namespace FileSync.Common
             {
                 HashStr = hash,
                 RelativePath = relativeFilePath.TrimStart(Path.DirectorySeparatorChar),
-                AbsolutePath = Path.Combine(baseDir, relativeFilePath),
                 State = SyncFileState.NotChanged,
             });
         }
