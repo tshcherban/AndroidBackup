@@ -150,6 +150,8 @@ namespace FileSync.Common
                         f.NewRelativePath = null;
                     }
 
+                    session.SyncDb.Files.RemoveAll(x => x.State == SyncFileState.Deleted);
+
                     foreach (var f in session.SyncDb.Files)
                     {
                         f.State = SyncFileState.NotChanged;
@@ -370,7 +372,11 @@ namespace FileSync.Common
                                     }
                                     else
                                     {
-                                        syncInfo.Conflicts.Add(localFileInfo);
+                                        var fileExt = Path.GetExtension(localFileInfo.RelativePath);
+                                        var newPath = Path.GetFileNameWithoutExtension(localFileInfo.RelativePath) + "_FromServer" + fileExt;
+                                        localFileInfo.NewRelativePath = newPath;
+                                        session.FilesForRename.Add((localFileInfo.RelativePath, newPath));
+                                        syncInfo.ToDownload.Add(localFileInfo);
                                     }
 
                                     break;
@@ -407,6 +413,13 @@ namespace FileSync.Common
                                         localFileInfo.NewRelativePath = newPath;
                                         session.FilesForRename.Add((localFileInfo.RelativePath, newPath));
                                         syncInfo.ToDownload.Add(localFileInfo);
+                                    }
+                                    else if (localFileInfo.State == SyncFileState.Deleted)
+                                    {
+                                        var fileExt = Path.GetExtension(remoteFileInfo.RelativePath);
+                                        var newPath = Path.GetFileNameWithoutExtension(remoteFileInfo.RelativePath) + "_FromClient" + fileExt;
+                                        remoteFileInfo.NewRelativePath = newPath;
+                                        syncInfo.ToUpload.Add(remoteFileInfo);
                                     }
                                     break;
                                 case SyncFileState.NotChanged:

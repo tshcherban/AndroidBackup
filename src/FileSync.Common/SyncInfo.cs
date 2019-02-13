@@ -8,8 +8,6 @@ namespace FileSync.Common
     {
         public List<SyncFileInfo> ToUpload { get; } = new List<SyncFileInfo>();
 
-        public List<SyncFileInfo> Conflicts { get; } = new List<SyncFileInfo>();
-
         public List<SyncFileInfo> ToDownload { get; } = new List<SyncFileInfo>();
 
         public List<SyncFileInfo> ToRemove { get; } = new List<SyncFileInfo>();
