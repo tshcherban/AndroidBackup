@@ -34,7 +34,7 @@ namespace FileSync.Android.Activities
             _servers = new ServerCollectionDiscovery();
 
             _serverListView = FindViewById<ListView>(Resource.Id.discoveredServerList);
-            _serverListView.Adapter = new ServerListAdapter(this, _servers);
+            _serverListView.Adapter = new ServerListAdapter(this, _servers, false);
             _serverListView.ItemClick += ServerListViewOnItemClick;
         }
 

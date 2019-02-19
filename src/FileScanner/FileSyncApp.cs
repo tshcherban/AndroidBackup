@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 using Android.App;
 using Android.Runtime;
@@ -71,6 +72,8 @@ namespace FileSync.Android
         void Load();
 
         void Store();
+        
+        void RemoveServer(string serverAddress);
     }
 
     public class ServerConfigItem
@@ -119,6 +122,12 @@ namespace FileSync.Android
         {
             var json = JsonConvert.SerializeObject(this, Formatting.Indented);
             System.IO.File.WriteAllText(_filePath, json);
+        }
+
+        public void RemoveServer(string serverAddress)
+        {
+            var s = _servers.First(x => x.Url == serverAddress);
+            _servers.Remove(s);
         }
 
         public void Load()

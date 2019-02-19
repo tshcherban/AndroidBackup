@@ -7,12 +7,14 @@ namespace FileSync.Android.Model
     public class ServerListAdapter : BaseAdapter<string>
     {
         private readonly ServerCollection _servers;
+        private readonly bool _showStatus;
         private readonly Activity _context;
 
-        public ServerListAdapter(Activity context, ServerCollection servers)
+        public ServerListAdapter(Activity context, ServerCollection servers, bool showStatus)
         {
             _context = context;
             _servers = servers;
+            _showStatus = showStatus;
             _servers.DataUpdated += ServersOnDataUpdated;
         }
 
@@ -42,8 +44,15 @@ namespace FileSync.Android.Model
             var dataItem = _servers.Items[position];
 
             var view = convertView ?? _context.LayoutInflater.Inflate(Resource.Layout.ServerListItem, null);
-            var stateName = dataItem.State ? "OK" : "Error";
-            view.FindViewById<TextView>(Resource.Id.Tv11).Text = $"{dataItem.Address}\t\t\t{stateName}";
+
+            var text = dataItem.Address;
+            if (_showStatus)
+            {
+                var stateName = dataItem.State ? "OK" : "Error";
+                text += $"\t\t\t{stateName}";
+            }
+
+            view.FindViewById<TextView>(Resource.Id.Tv11).Text = text;
 
             return view;
         }

@@ -68,7 +68,7 @@ namespace FileSync.Android.Activities
             _testBtn.Click += ServersActivityBtn_OnClick;
 
             _serverListView = FindViewById<ListView>(Resource.Id.serverList);
-            _serverListAdapter = new ServerListAdapter(this, _servers);
+            _serverListAdapter = new ServerListAdapter(this, _servers, true);
             _serverListView.Adapter = _serverListAdapter;
             _serverListView.ItemClick += ServerListViewOnItemClick;
         }
@@ -101,7 +101,10 @@ namespace FileSync.Android.Activities
         private void ServerListViewOnItemClick(object sender, AdapterView.ItemClickEventArgs e)
         {
             var item = _servers.Items[e.Position];
-            Toast.MakeText(this, $"Server {item.Address}", ToastLength.Short).Show();
+            var intent = new Intent(this, typeof(ServerViewActivity));
+            intent.PutExtra("server", item.Address);
+            StartActivity(intent);
+            //Toast.MakeText(this, $"Server {item.Address}", ToastLength.Short).Show();
         }
 
         private void ServersActivityBtn_OnClick(object sender, EventArgs e)
@@ -111,19 +114,39 @@ namespace FileSync.Android.Activities
 
         private const int ServersActivityRequest = 114;
 
+        protected override void OnStop()
+        {
+            System.Diagnostics.Debugger.Log(0, "", ">>>>>> OnStop\r\n");
+
+            _servers.StopPing();
+
+            base.OnStop();
+        }
+
         protected override void OnResume()
         {
+            System.Diagnostics.Debugger.Log(0, "", ">>>>>> OnResume\r\n");
             _servers.SetServerListFromConfig(FileSyncApp.Instance.Config.Servers);
             _servers.RunPing();
 
             base.OnResume();
         }
 
+        public override bool MoveTaskToBack(bool nonRoot)
+        {
+            System.Diagnostics.Debugger.Log(0, "", ">>>>>> MoveTaskToBack\r\n");
+            return base.MoveTaskToBack(nonRoot);
+        }
+
+        protected override void OnPause()
+        {
+            System.Diagnostics.Debugger.Log(0, "", ">>>>>> OnPause\r\n");
+            base.OnPause();
+        }
+
         protected override void OnNewIntent(Intent intent)
         {
             base.OnNewIntent(intent);
-
-            
         }
 
         /*protected override void OnActivityResult(int requestCode, [GeneratedEnum] Result resultCode, Intent data)

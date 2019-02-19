@@ -51,14 +51,14 @@ namespace FileSync.Android.Model
 
     public class ServerCollectionPing : ServerCollection
     {
-        private bool _running;
+        private bool _pingRunning;
 
         public void RunPing(CancellationToken? token = null)
         {
-            if (_running)
+            if (_pingRunning)
                 return;
 
-            _running = true;
+            _pingRunning = true;
 
             if (token == null)
                 token = CancellationToken.None;
@@ -75,7 +75,7 @@ namespace FileSync.Android.Model
 
                         if (itemsList.Count == 0)
                             continue;
-                        
+
                         var changed = false;
 
                         foreach (var server in itemsList)
@@ -97,6 +97,11 @@ namespace FileSync.Android.Model
             var prevState = server.State;
             server.State = await comm.PingServer(server);
             return server.State != prevState;
+        }
+
+        public void StopPing()
+        {
+            _pingRunning = false;
         }
     }
 }

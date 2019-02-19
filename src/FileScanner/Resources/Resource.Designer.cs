@@ -74,6 +74,12 @@ namespace FileSync.Android
 			// aapt resource value: 0x7f040001
 			public const int serverPortTxtView = 2130968577;
 			
+			// aapt resource value: 0x7f04000b
+			public const int serverViewRemoveServerBtn = 2130968587;
+			
+			// aapt resource value: 0x7f04000c
+			public const int serverViewServerListView = 2130968588;
+			
 			// aapt resource value: 0x7f040003
 			public const int startDiscoverBtn = 2130968579;
 			
@@ -101,6 +107,9 @@ namespace FileSync.Android
 			
 			// aapt resource value: 0x7f020003
 			public const int ServerListItem = 2130837507;
+			
+			// aapt resource value: 0x7f020004
+			public const int ServerView = 2130837508;
 			
 			static Layout()
 			{
