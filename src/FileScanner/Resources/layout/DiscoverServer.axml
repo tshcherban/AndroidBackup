@@ -1,14 +1,32 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
-    android:orientation="vertical"
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
-    android:layout_height="match_parent">
+    android:layout_height="match_parent"
+    android:minWidth="25px"
+    android:minHeight="25px">
+    <!--<TextView
+        android:layout_width="match_parent"
+        android:layout_height="375dp"
+        android:id="@+id/editText1"
+        android:verticalScrollbarPosition="right"
+        android:scrollbars="vertical" />-->
     <Button
-        android:text="Start discovery"
+        android:text="Discover"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:minWidth="25px"
-        android:minHeight="25px"
-        android:id="@+id/startDiscoveryBtn1" />
-
-</LinearLayout>
+        android:id="@+id/startDiscoverBtn"
+        android:layout_alignParentBottom="true" />
+    <Button
+        android:text="Manual enter"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:id="@+id/manualAddBtn"
+        android:layout_above="@id/startDiscoverBtn" />
+    <ListView
+        android:layout_width="fill_parent"
+        android:layout_height="fill_parent"
+        android:id="@+id/discoveredServerList"
+        android:cacheColorHint="#FFDAFF7F"
+        android:background="#00DAFF7F"
+        android:layout_above="@id/startDiscoverBtn" />
+</RelativeLayout>

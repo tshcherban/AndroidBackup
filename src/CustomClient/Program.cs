@@ -1,8 +1,5 @@
 ﻿using System;
-using System.Diagnostics;
-using System.IO;
-using System.Linq;
-using System.Security.Cryptography;
+using System.Net;
 using FileSync.Common;
 
 namespace FileSync.TestClient
@@ -11,40 +8,18 @@ namespace FileSync.TestClient
     {
         static void Main(string[] args)
         {
-            /*var client = SyncClientFactory.GetTwoWay("127.0.0.1", 9211, @"G:\SyncTest\Src", @"G:\SyncTest\Src\.sync");
+            var srv = new SyncServer(9211, @"D:\taras\stest\server", Guid.NewGuid());
+            srv.Msg += Console.WriteLine;
+            srv.Start();
+
+            var client = SyncClientFactory.GetTwoWay(new IPEndPoint(IPAddress.Parse("127.0.0.1"), 9211), @"D:\taras\stest\client", @"D:\taras\stest\client\.sync");
             client.Log += Console.WriteLine;
-            client.Sync().Wait();*/
-
-            const FileOptions fileFlagNoBuffering = (FileOptions) 0x20000000;
-            const FileOptions fileOptions = fileFlagNoBuffering | FileOptions.SequentialScan;
-
-            const int chunkSize = 128 * 1024 * 1024;
-
-            var readBufferSize = chunkSize;
-            readBufferSize += ((readBufferSize + 1023) & ~1023) - readBufferSize;
-
-            var filePath = @"C:\shcherban\shcherban.7z";
-
-            var sw = Stopwatch.StartNew();
-
-            using (var sourceStream = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.Read, readBufferSize, fileOptions))
-            using (var bfs = new BufferedStream(sourceStream, readBufferSize))
-            {
-                var length = sourceStream.Length;
-
-                var readSize = Convert.ToInt32(Math.Min(chunkSize, length));
-
-
-                sw.Stop();
-
-
-                
-
-                Console.WriteLine($"{sw.Elapsed.TotalMilliseconds:F2} ms (speed - {(sourceStream.Length/1024m/1024m)/(decimal)sw.Elapsed.TotalSeconds:F2} mb/s)");
-            }
+            client.Sync().Wait();
 
             Console.WriteLine("Done");
             Console.ReadKey();
+
+            srv.Stop();
         }
     }
 }

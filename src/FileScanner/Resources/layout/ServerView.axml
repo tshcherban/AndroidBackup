@@ -11,28 +11,16 @@
         android:verticalScrollbarPosition="right"
         android:scrollbars="vertical" />-->
     <Button
-        android:text="Add server"
+        android:text="Remove server"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:id="@+id/button3"
+        android:id="@+id/serverViewRemoveServerBtn"
         android:layout_alignParentBottom="true" />
-    <Button
-        android:text="Stop"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:id="@+id/button2"
-        android:layout_above="@id/button3" />
-    <Button
-        android:text="Start"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:id="@+id/button1"
-        android:layout_above="@id/button2" />
     <ListView
         android:layout_width="fill_parent"
         android:layout_height="fill_parent"
-        android:id="@+id/serverList"
+        android:id="@+id/serverViewServerListView"
         android:cacheColorHint="#FFDAFF7F"
         android:background="#00DAFF7F"
-        android:layout_above="@id/button1"/>
+        android:layout_above="@id/serverViewRemoveServerBtn"/>
 </RelativeLayout>

@@ -93,11 +93,6 @@ namespace FileSync.Common
                             syncDb.Files.Remove(fi);
                         }
 
-                        if (syncList.Data.Conflicts.Count > 0)
-                        {
-                            Debugger.Break();
-                        }
-
                         if (!await ReceiveFiles(networkStream, syncList.Data.ToDownload, syncDb))
                         {
                             return;

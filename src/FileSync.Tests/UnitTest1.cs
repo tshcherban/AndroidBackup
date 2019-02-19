@@ -79,7 +79,7 @@ namespace FileSync.Tests
         [TestMethod]
         public void TwoWaySync_Test()
         {
-            var server = new SyncServer(9211, @"D:\Taras\stest");
+            var server = new SyncServer(9211, @"D:\Taras\stest", Guid.NewGuid());
 
             server.Msg += Console.WriteLine;
 

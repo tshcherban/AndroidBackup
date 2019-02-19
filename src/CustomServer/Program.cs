@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Threading.Tasks;
 using FileSync.Common;
 
 namespace FileSync.Server
@@ -7,9 +8,11 @@ namespace FileSync.Server
     {
         private const int Port = 9211;
 
-        //const string Path = @"C:\shcherban\stest";
+        const string Path = @"C:\shcherban\stest";
         //const string Path = @"H:\SyncTest\Dst";
-        private const string Path = @"D:\taras\stest";
+        //private const string Path = @"D:\taras\stest";
+
+        private static bool _stopping;
 
         private static void ClientHandlerOnMsg(string s)
         {
@@ -25,7 +28,7 @@ namespace FileSync.Server
                 return;
             }
 
-            var server = new SyncServer(Port, Path);
+            var server = new SyncServer(Port, Path, ServerId);
 
             server.Msg += ClientHandlerOnMsg;
 
@@ -33,32 +36,44 @@ namespace FileSync.Server
 
             Console.WriteLine("Listening. Press return to quit");
 
-            Discover();
+            Task.Run(Discover);
 
             while (Console.ReadKey().Key != ConsoleKey.Enter) ;
+
+            _stopping = true;
 
             server.Stop();
         }
 
-        private static async void Discover()
+        private static readonly Guid ServerId = Guid.ParseExact("5991611F-62F1-4B50-8546-447C04C0049E", "D");
+
+        private static async Task Discover()
         {
             using (var server = new System.Net.Sockets.UdpClient(8888))
             {
-                var responseData = System.Text.Encoding.ASCII.GetBytes($"port: {Port}");
+                var responseData = System.Text.Encoding.ASCII.GetBytes($"port: {Port}|id: {ServerId:D}");
 
-                while (!false)
+                while (!_stopping)
                 {
                     try
                     {
                         var clientRequestData = await server.ReceiveAsync(); // (ref clientEp);
                         var clientRequest = System.Text.Encoding.ASCII.GetString(clientRequestData.Buffer);
-
-                        Console.WriteLine("Request from {0}, sending discover response", clientRequestData.RemoteEndPoint.Address);
-                        await server.SendAsync(responseData, responseData.Length, clientRequestData.RemoteEndPoint);
+                        if (clientRequest == "sync-service")
+                        {
+                            Console.WriteLine("Request from {0}, sending discover response", clientRequestData.RemoteEndPoint.Address);
+                            await server.SendAsync(responseData, responseData.Length, clientRequestData.RemoteEndPoint);
+                        }
+                        else
+                        {
+                            Console.WriteLine("Request from {0} invalid {1}", clientRequestData.RemoteEndPoint.Address, clientRequest);
+                            await server.SendAsync(responseData, responseData.Length, clientRequestData.RemoteEndPoint);
+                        }
                     }
                     catch (Exception e)
                     {
                         Console.WriteLine($"Failed on discovery: {e}");
+                        await Task.Delay(2000);
                     }
                 }
             }
