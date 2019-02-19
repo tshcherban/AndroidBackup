@@ -17,8 +17,8 @@ namespace FileSync.Android.Helpers
 
         public async Task<ServerListDataItem> Discover()
         {
-            //var ipAddress = IPAddress.Broadcast;
-            var ipAddress = IPAddress.Parse("10.0.2.0"); // for android emulator
+            var ipAddress = IPAddress.Broadcast;
+            //var ipAddress = IPAddress.Parse("10.0.2.0"); // for android emulator
             try
             {
                 Log?.Invoke("Discovering...");

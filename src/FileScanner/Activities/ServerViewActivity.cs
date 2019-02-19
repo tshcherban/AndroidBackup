@@ -30,7 +30,7 @@ namespace FileSync.Android.Activities
         {
             var d = new DialogHelper(this);
             var result = await d.ShowDialog("Confirm", "Delete server?", negativeButton: DialogHelper.MessageResult.No, positiveButton: DialogHelper.MessageResult.Yes);
-            if (result != DialogHelper.MessageResult.Ok)
+            if (result != DialogHelper.MessageResult.Yes)
                 return;
 
             FileSyncApp.Instance.Config.RemoveServer(_serverAddress);

@@ -67,10 +67,10 @@ namespace FileSync.Android.Model
             {
                 try
                 {
-                    while (!token.Value.IsCancellationRequested)
+                    while (_pingRunning && !token.Value.IsCancellationRequested)
                     {
                         await Task.Delay(1000, token.Value);
-                        if (token.Value.IsCancellationRequested)
+                        if (!_pingRunning || token.Value.IsCancellationRequested)
                             break;
 
                         if (itemsList.Count == 0)
@@ -88,6 +88,8 @@ namespace FileSync.Android.Model
                 catch (TaskCanceledException)
                 {
                 }
+
+                _pingRunning = false;
             });
         }
 
