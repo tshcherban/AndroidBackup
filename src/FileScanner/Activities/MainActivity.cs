@@ -6,20 +6,23 @@ using Android.Content;
 using Android.Content.PM;
 using Android.OS;
 using Android.Runtime;
-using Android.Text.Method;
 using Android.Views;
 using Android.Widget;
+using FileSync.Android.Model;
 using FileSync.Common;
 using FileSync.Common.Config;
 using Extensions = FileSync.Common.Extensions;
 using Task = System.Threading.Tasks.Task;
 
-namespace FileSync.Android
+namespace FileSync.Android.Activities
 {
     [Activity(Label = "FileScanner", MainLauncher = true)]
     public class MainActivity : Activity
     {
         private const int PermissionsTimeout = 10000;
+        private const long DoublePressIntervalMs = 2000;
+
+        private DateTime _lastPressTime = DateTime.Now.AddMilliseconds(-DoublePressIntervalMs);
 
         private readonly string[] _permissions =
         {
@@ -34,17 +37,16 @@ namespace FileSync.Android
         private TaskCompletionSource<bool> _requestPermissionsTaskCompletionSource;
         private Button _syncBtn;
 
-        private readonly string _dataDir;
-        private readonly string _clientConfigPath;
-        private SyncServiceConfigStore _configStore;
+        private readonly ServerCollectionPing _servers;
+
         private Button _testBtn;
+        private ListView _serverListView;
+        private ServerListAdapter _serverListAdapter;
 
         public MainActivity()
         {
-            _dataDir = System.Environment.GetFolderPath(System.Environment.SpecialFolder.Personal);
-            _clientConfigPath = "/sdcard/client.json";
-
-            _configStore = new SyncServiceConfigStore(_clientConfigPath);
+            _servers = new ServerCollectionPing();
+            _servers.SetServerListFromConfig(FileSyncApp.Instance.Config.Servers);
         }
 
         protected override void OnCreate(Bundle savedInstanceState)
@@ -55,35 +57,92 @@ namespace FileSync.Android
 
             Window.AddFlags(WindowManagerFlags.KeepScreenOn);
 
-            _logTextView = FindViewById<TextView>(Resource.Id.editText1);
-            _logTextView.TextAlignment = TextAlignment.Gravity;
-            _logTextView.MovementMethod = new ScrollingMovementMethod();
+            //_logTextView = FindViewById<TextView>(Resource.Id.editText1);
+            //_logTextView.TextAlignment = TextAlignment.Gravity;
+            //_logTextView.MovementMethod = new ScrollingMovementMethod();
 
             _syncBtn = FindViewById<Button>(Resource.Id.button1);
             _syncBtn.Click += SyncBtn_OnClick;
 
             _testBtn = FindViewById<Button>(Resource.Id.button3);
-            _testBtn.Click += TestBtn_OnClick;
+            _testBtn.Click += ServersActivityBtn_OnClick;
+
+            _serverListView = FindViewById<ListView>(Resource.Id.serverList);
+            _serverListAdapter = new ServerListAdapter(this, _servers);
+            _serverListView.Adapter = _serverListAdapter;
+            _serverListView.ItemClick += ServerListViewOnItemClick;
         }
 
-        private void TestBtn_OnClick(object sender, EventArgs e)
+        protected override void Dispose(bool disposing)
         {
-            StartActivityForResult(typeof(DiscoverServerActivity), 0);
+            _serverListAdapter?.Dispose();
+            _serverListAdapter = null;
+
+            _serverListView.ItemClick -= ServerListViewOnItemClick;
+
+            base.Dispose(disposing);
         }
 
-        protected override void OnActivityResult(int requestCode, [GeneratedEnum] Result resultCode, Intent data)
+        public override void OnBackPressed()
+        {
+            var pressTime = DateTime.Now;
+            if ((pressTime - _lastPressTime).TotalMilliseconds <= DoublePressIntervalMs)
+            {
+                FileSyncApp.Instance.Stop();
+                System.Threading.Thread.Sleep(500);
+                Java.Lang.JavaSystem.Exit(0);
+            }
+
+            _lastPressTime = pressTime;
+
+            Toast.MakeText(this, "Press BACK again to exit", ToastLength.Short).Show();
+        }
+
+        private void ServerListViewOnItemClick(object sender, AdapterView.ItemClickEventArgs e)
+        {
+            var item = _servers.Items[e.Position];
+            Toast.MakeText(this, $"Server {item.Address}", ToastLength.Short).Show();
+        }
+
+        private void ServersActivityBtn_OnClick(object sender, EventArgs e)
+        {
+            StartActivity(typeof(DiscoverServerActivity));
+        }
+
+        private const int ServersActivityRequest = 114;
+
+        protected override void OnResume()
+        {
+            _servers.SetServerListFromConfig(FileSyncApp.Instance.Config.Servers);
+            _servers.RunPing();
+
+            base.OnResume();
+        }
+
+        protected override void OnNewIntent(Intent intent)
+        {
+            base.OnNewIntent(intent);
+
+            
+        }
+
+        /*protected override void OnActivityResult(int requestCode, [GeneratedEnum] Result resultCode, Intent data)
         {
             base.OnActivityResult(requestCode, resultCode, data);
 
-            if (resultCode == Result.Ok)
+            if (requestCode == ServersActivityRequest)
             {
-                AppendLog(data.Extras.GetString("server"));
+                if (resultCode == Result.Ok)
+                {
+                    AppendLog(data.Extras.GetString("server"));
+                }
             }
-        }
+        }*/
 
         private void AppendLog(string msg)
         {
-            RunOnUiThread(() => { _logTextView.Text = $"{msg}\r\n{_logTextView.Text}"; });
+            //RunOnUiThread(() => { _logTextView.Text = $"{msg}\r\n{_logTextView.Text}"; });
+            System.Diagnostics.Debugger.Log(0, "", $">>>>>>> {msg}\r\n");
         }
 
         private async Task<bool> TryGetPermissionsAsync()

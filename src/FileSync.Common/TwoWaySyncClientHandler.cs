@@ -12,6 +12,7 @@ namespace FileSync.Common
     {
         private readonly TcpClient _tcpClient;
         private readonly string _rootFolder;
+        private readonly Guid _serverId;
         private NetworkStream _networkStream;
         private bool _connected;
 
@@ -19,10 +20,11 @@ namespace FileSync.Common
 
         private readonly StringBuilder _log;
 
-        public TwoWaySyncClientHandler(TcpClient tcpClient, string folder)
+        public TwoWaySyncClientHandler(TcpClient tcpClient, string folder, Guid serverId)
         {
             _tcpClient = tcpClient;
             _rootFolder = folder;
+            _serverId = serverId;
             _log = new StringBuilder();
         }
 
@@ -64,6 +66,9 @@ namespace FileSync.Common
                     case Commands.DisconnectCmd:
                         _connected = false;
                         break;
+                    case Commands.GetIdCmd:
+                        await ProcessGetidCmd();
+                        break;
                     default:
                         _connected = false;
                         break;
@@ -85,6 +90,21 @@ namespace FileSync.Common
                     Console.WriteLine("Unexpected error but client already disconnected, ignoring...");
                 }
             }
+        }
+
+        private async Task ProcessGetidCmd()
+        {
+            var response = new ServerResponseWithData<Guid>();
+            try
+            {
+                response.Data = _serverId;
+            }
+            catch (Exception e)
+            {
+                response.ErrorMsg = e.ToString();
+            }
+
+            await CommandHelper.WriteCommandResponse(_networkStream, Commands.GetIdCmd, response);
         }
 
         private async Task ProcessGetSessionCmd()

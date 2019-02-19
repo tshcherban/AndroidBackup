@@ -1,9 +1,5 @@
 ﻿using System;
-using System.Diagnostics;
-using System.IO;
-using System.Linq;
 using System.Net;
-using System.Security.Cryptography;
 using FileSync.Common;
 
 namespace FileSync.TestClient
@@ -12,7 +8,7 @@ namespace FileSync.TestClient
     {
         static void Main(string[] args)
         {
-            var srv = new SyncServer(9211, @"D:\taras\stest\server");
+            var srv = new SyncServer(9211, @"D:\taras\stest\server", Guid.NewGuid());
             srv.Msg += Console.WriteLine;
             srv.Start();
 

@@ -44,20 +44,38 @@ namespace FileSync.Android
 		public partial class Id
 		{
 			
-			// aapt resource value: 0x7f040002
-			public const int button1 = 2130968578;
+			// aapt resource value: 0x7f04000a
+			public const int Tv11 = 2130968586;
 			
-			// aapt resource value: 0x7f040003
-			public const int button2 = 2130968579;
+			// aapt resource value: 0x7f040008
+			public const int button1 = 2130968584;
+			
+			// aapt resource value: 0x7f040007
+			public const int button2 = 2130968583;
+			
+			// aapt resource value: 0x7f040006
+			public const int button3 = 2130968582;
+			
+			// aapt resource value: 0x7f040002
+			public const int confirmAddServerBtn = 2130968578;
+			
+			// aapt resource value: 0x7f040005
+			public const int discoveredServerList = 2130968581;
 			
 			// aapt resource value: 0x7f040004
-			public const int button3 = 2130968580;
-			
-			// aapt resource value: 0x7f040001
-			public const int editText1 = 2130968577;
+			public const int manualAddBtn = 2130968580;
 			
 			// aapt resource value: 0x7f040000
-			public const int startDiscoveryBtn1 = 2130968576;
+			public const int serverAddressTxtView = 2130968576;
+			
+			// aapt resource value: 0x7f040009
+			public const int serverList = 2130968585;
+			
+			// aapt resource value: 0x7f040001
+			public const int serverPortTxtView = 2130968577;
+			
+			// aapt resource value: 0x7f040003
+			public const int startDiscoverBtn = 2130968579;
 			
 			static Id()
 			{
@@ -73,10 +91,16 @@ namespace FileSync.Android
 		{
 			
 			// aapt resource value: 0x7f020000
-			public const int DiscoverServer = 2130837504;
+			public const int AddServer = 2130837504;
 			
 			// aapt resource value: 0x7f020001
-			public const int Main = 2130837505;
+			public const int DiscoverServer = 2130837505;
+			
+			// aapt resource value: 0x7f020002
+			public const int Main = 2130837506;
+			
+			// aapt resource value: 0x7f020003
+			public const int ServerListItem = 2130837507;
 			
 			static Layout()
 			{

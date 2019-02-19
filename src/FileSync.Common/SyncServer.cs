@@ -9,6 +9,7 @@ namespace FileSync.Common
     {
         private readonly int _port;
         private readonly string _syncDir;
+        private readonly Guid _id;
         private readonly object _lock = new object(); // sync lock 
         private readonly List<Task> _connections = new List<Task>(); // pending connections
 
@@ -20,10 +21,11 @@ namespace FileSync.Common
 
         public event Action<string> Msg;
 
-        public SyncServer(int port, string syncDir)
+        public SyncServer(int port, string syncDir, Guid id)
         {
             _port = port;
             _syncDir = syncDir;
+            _id = id;
         }
 
         public void Stop()
@@ -122,6 +124,15 @@ namespace FileSync.Common
                     _connections.Remove(connectionTask);
                 }
 
+                try
+                {
+                    tcpClient.Dispose();
+                }
+                catch (Exception e)
+                {
+                    Console.WriteLine(e);
+                }
+
                 Msg?.Invoke("Client has disconnected");
             }
         }
@@ -131,7 +142,7 @@ namespace FileSync.Common
         {
             await Task.Yield();
 
-            using (var clientHandler = new TwoWaySyncClientHandler(tcpClient, _syncDir))
+            using (var clientHandler = new TwoWaySyncClientHandler(tcpClient, _syncDir, _id))
             {
                 clientHandler.Msg += ClientHandlerOnMsg;
                 await clientHandler.Process();
