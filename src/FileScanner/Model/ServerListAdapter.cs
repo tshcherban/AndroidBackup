@@ -1,4 +1,5 @@
-﻿using Android.App;
+﻿using System;
+using Android.App;
 using Android.Views;
 using Android.Widget;
 
@@ -56,5 +57,54 @@ namespace FileSync.Android.Model
 
             return view;
         }
+    }
+
+    public class FolderListAdapter : BaseAdapter<FolderListDataItem>
+    {
+        private readonly FolderCollection _folders;
+        private readonly Activity _context;
+        
+        public FolderListAdapter(FolderCollection folders, Activity context)
+        {
+            _folders = folders;
+            _context = context;
+            folders.DataUpdated += FoldersOnDataUpdated;
+        }
+
+        private void FoldersOnDataUpdated()
+        {
+            _context.RunOnUiThread(NotifyDataSetChanged);
+        }
+
+        public override long GetItemId(int position)
+        {
+            return position;
+        }
+
+        public override View GetView(int position, View convertView, ViewGroup parent)
+        {
+            var dataItem = _folders.Items[position];
+
+            var view = convertView ?? _context.LayoutInflater.Inflate(Resource.Layout.FolderListItem, null);
+
+            var text = dataItem.DisplayName;
+
+            try
+            {
+                var textView = view.FindViewById<TextView>(Resource.Id.folderListItemFolderNameTxtView);
+                if (textView != null)
+                    textView.Text = text;
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine(e);
+            }
+
+            return view;
+        }
+
+        public override int Count => _folders.Items.Count;
+
+        public override FolderListDataItem this[int position] => _folders.Items[position];
     }
 }

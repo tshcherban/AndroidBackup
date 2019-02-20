@@ -1,16 +1,29 @@
 ﻿using System;
+using System.Linq;
 using System.Threading.Tasks;
 using Android.App;
+using Android.Content;
 using Android.OS;
 using Android.Views;
 using Android.Widget;
+using FileSync.Android.Model;
 
 namespace FileSync.Android.Activities
 {
     [Activity(Label = "ServerViewActivity")]
     public class ServerViewActivity : Activity
     {
-        private string _serverAddress;
+        private readonly FolderCollection _folders;
+
+        private string _serverUrl;
+        private ListView _foldersListView;
+        private FolderListAdapter _folderListAdapter;
+        private ServerConfigItem _serverItem;
+
+        public ServerViewActivity()
+        {
+            _folders = new FolderCollection();
+        }
 
         protected override void OnCreate(Bundle savedInstanceState)
         {
@@ -20,10 +33,36 @@ namespace FileSync.Android.Activities
 
             Window.AddFlags(WindowManagerFlags.KeepScreenOn);
 
-            var btn = FindViewById<Button>(Resource.Id.serverViewRemoveServerBtn);
-            btn.Click += RemoveServerBtn_Click;
+            Title = $"{_serverUrl} sync folders";
 
-            _serverAddress = Intent.GetStringExtra("server");
+            var removeServerBtn = FindViewById<Button>(Resource.Id.serverViewRemoveServerBtn);
+            removeServerBtn.Click += RemoveServerBtn_Click;
+
+            var addFolderBtn = FindViewById<Button>(Resource.Id.serverViewAddFolderBtn);
+            addFolderBtn.Click += AddFolderBtn_Click;
+
+            _serverUrl = Intent.GetStringExtra("server");
+            _serverItem = FileSyncApp.Instance.Config.Servers.Single(x => x.Url == _serverUrl);
+
+            _folders.SetServerListFromConfig(_serverItem.Folders);
+
+            _folderListAdapter = new FolderListAdapter(_folders, this);
+
+            _foldersListView = FindViewById<ListView>(Resource.Id.serverViewFolderListView);
+            _foldersListView.Adapter = _folderListAdapter;
+            _foldersListView.ItemClick += FolderListViewOnItemClick;
+        }
+
+        private void AddFolderBtn_Click(object sender, EventArgs e)
+        {
+            var intent = new Intent(this, typeof(FolderListScanActivity));
+            intent.PutExtra("server", _serverUrl);
+            StartActivity(intent);
+        }
+
+        private void FolderListViewOnItemClick(object sender, AdapterView.ItemClickEventArgs e)
+        {
+            
         }
 
         private async void RemoveServerBtn_Click(object sender, EventArgs e)
@@ -33,7 +72,7 @@ namespace FileSync.Android.Activities
             if (result != DialogHelper.MessageResult.Yes)
                 return;
 
-            FileSyncApp.Instance.Config.RemoveServer(_serverAddress);
+            FileSyncApp.Instance.Config.RemoveServer(_serverUrl);
             FileSyncApp.Instance.Config.Store();
             Finish();
         }

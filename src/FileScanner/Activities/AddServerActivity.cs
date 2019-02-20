@@ -63,9 +63,18 @@ namespace FileSync.Android.Activities
                 return;
             }
 
+            var res = await comm.RegisterClient(FileSyncApp.Instance.Config.ClientId, addr, port);
+            if (!res)
+            {
+                Toast.MakeText(this, "Unable to register client", ToastLength.Short).Show();
+                return;
+            }
+
             FileSyncApp.Instance.Config.AddServer(id.Value, new IPEndPoint(addr, port).ToString());
             FileSyncApp.Instance.Config.Store();
+
             Toast.MakeText(this, "Server added successfully", ToastLength.Short).Show();
+
             Finish();
         }
     }

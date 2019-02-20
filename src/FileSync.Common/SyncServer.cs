@@ -12,20 +12,20 @@ namespace FileSync.Common
         private readonly Guid _id;
         private readonly object _lock = new object(); // sync lock 
         private readonly List<Task> _connections = new List<Task>(); // pending connections
+        private readonly IServerConfig _config;
 
         private bool _stop;
-
-        private TcpListener _tcpListener;
-
         private Task _listenerTask;
+        private TcpListener _tcpListener;
 
         public event Action<string> Msg;
 
-        public SyncServer(int port, string syncDir, Guid id)
+        public SyncServer(int port, string syncDir, Guid id, string configFilePath)
         {
             _port = port;
             _syncDir = syncDir;
             _id = id;
+            _config = new JsonFileServerConfig(configFilePath);
         }
 
         public void Stop()
@@ -60,6 +60,10 @@ namespace FileSync.Common
             {
                 Msg?.Invoke(e.ToString());
             }
+
+            Msg?.Invoke("Saving config");
+
+            _config.Store();
         }
 
         // The core server task
@@ -67,6 +71,8 @@ namespace FileSync.Common
         {
             _listenerTask = Task.Run(async () =>
             {
+                _config.Load();
+
                 _tcpListener = TcpListener.Create(_port);
                 _tcpListener.Start();
                 while (!_stop)
@@ -142,7 +148,7 @@ namespace FileSync.Common
         {
             await Task.Yield();
 
-            using (var clientHandler = new TwoWaySyncClientHandler(tcpClient, _syncDir, _id))
+            using (var clientHandler = new TwoWaySyncClientHandler(tcpClient, _syncDir, _id, _config))
             {
                 clientHandler.Msg += ClientHandlerOnMsg;
                 await clientHandler.Process();

@@ -28,7 +28,7 @@ namespace FileSync.Server
                 return;
             }
 
-            var server = new SyncServer(Port, Path, ServerId);
+            var server = new SyncServer(Port, Path, ServerId, "config.json");
 
             server.Msg += ClientHandlerOnMsg;
 

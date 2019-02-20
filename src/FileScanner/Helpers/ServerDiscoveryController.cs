@@ -3,7 +3,6 @@ using System.Net;
 using System.Net.Sockets;
 using System.Text;
 using System.Threading.Tasks;
-using FileSync.Android.Activities;
 using FileSync.Android.Model;
 using FileSync.Common;
 
@@ -17,8 +16,9 @@ namespace FileSync.Android.Helpers
 
         public async Task<ServerListDataItem> Discover()
         {
-            var ipAddress = IPAddress.Broadcast;
-            //var ipAddress = IPAddress.Parse("10.0.2.0"); // for android emulator
+            //var discoveryIpAddress = IPAddress.Broadcast;
+            var discoveryIpAddress = IPAddress.Parse("10.0.2.0"); // for android emulator
+            var discoveryPort = 8888;
             try
             {
                 Log?.Invoke("Discovering...");
@@ -29,7 +29,7 @@ namespace FileSync.Android.Helpers
 
                     client.EnableBroadcast = true;
                     
-                    var sendResult = await client.SendAsync(requestData, requestData.Length, new IPEndPoint(ipAddress, 8888)).WhenOrTimeout(DiscoveryTimeout);
+                    var sendResult = await client.SendAsync(requestData, requestData.Length, new IPEndPoint(discoveryIpAddress, discoveryPort)).WhenOrTimeout(DiscoveryTimeout);
                     if (!sendResult.Item1)
                     {
                         Log?.Invoke("Discovery request timeout");

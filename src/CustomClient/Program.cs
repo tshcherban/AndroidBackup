@@ -8,7 +8,7 @@ namespace FileSync.TestClient
     {
         static void Main(string[] args)
         {
-            var srv = new SyncServer(9211, @"D:\taras\stest\server", Guid.NewGuid());
+            var srv = new SyncServer(9211, @"D:\taras\stest\server", Guid.NewGuid(), "config.json");
             srv.Msg += Console.WriteLine;
             srv.Start();
 

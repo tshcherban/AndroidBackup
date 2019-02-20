@@ -5,8 +5,8 @@ using Android.Widget;
 
 namespace FileSync.Android.Activities
 {
-    [Activity(Label = "SyncViewActivity")]
-    public class SyncViewActivity : Activity
+    [Activity(Label = "FolderViewActivity")]
+    public class FolderViewActivity : Activity
     {
         protected override void OnCreate(Bundle savedInstanceState)
         {

@@ -11,19 +11,24 @@ namespace FileSync.Common
 
         public const int PreambleLength = 4;
 
-        public const byte GetSessionCmd = 0x01;
 
-        public const byte GetSyncListCmd = 0x02;
+        public const byte GetSessionCmd = 1;
 
-        public const byte GetFileCmd = 0x03;
+        public const byte GetSyncListCmd = 2;
 
-        public const byte SendFileCmd = 0x04;
+        public const byte GetFileCmd = 3;
 
-        public const byte FinishSessionCmd = 0x05;
+        public const byte SendFileCmd = 4;
 
-        public const byte DisconnectCmd = 0x06;
+        public const byte FinishSessionCmd = 5;
 
-        public const byte GetIdCmd = 0x07;
+        public const byte DisconnectCmd = 6;
+
+        public const byte GetIdCmd = 7;
+
+        public const byte RegisterClientCmd = 8;
+
+        public const byte GetClientEndpointsCmd = 9;
     }
 
     public class CommandHeader
@@ -33,9 +38,45 @@ namespace FileSync.Common
             Command = commandId;
         }
 
+        protected CommandHeader()
+        {
+        }
+
         public virtual byte Command { get; }
 
         public int PayloadLength { get; set; }
+    }
+
+    [Serializable]
+    public abstract class CommandHeaderWithData<T>
+    {
+        private T _data;
+
+        protected CommandHeaderWithData()
+        {
+        }
+
+        public abstract byte Command { get; }
+
+        public int PayloadLength => Bytes.Length;
+
+        public void SetData(T data)
+        {
+            Bytes = Serializer.Serialize(data);
+
+        }
+
+        public byte[] Bytes { get; set; }
+    }
+
+    public class GetClientEndpointsRequest : CommandHeaderWithData<Guid>
+    {
+        public GetClientEndpointsRequest(Guid clientId)
+        {
+            SetData(clientId);
+        }
+
+        public override byte Command => Commands.GetClientEndpointsCmd;
     }
 
     [Serializable]

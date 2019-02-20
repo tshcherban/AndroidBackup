@@ -1,8 +1,10 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Net.Sockets;
+using System.Reflection;
 using System.Text;
 using System.Threading.Tasks;
 
@@ -13,6 +15,7 @@ namespace FileSync.Common
         private readonly TcpClient _tcpClient;
         private readonly string _rootFolder;
         private readonly Guid _serverId;
+        private readonly IServerConfig _config;
         private NetworkStream _networkStream;
         private bool _connected;
 
@@ -20,11 +23,12 @@ namespace FileSync.Common
 
         private readonly StringBuilder _log;
 
-        public TwoWaySyncClientHandler(TcpClient tcpClient, string folder, Guid serverId)
+        public TwoWaySyncClientHandler(TcpClient tcpClient, string folder, Guid serverId, IServerConfig config)
         {
             _tcpClient = tcpClient;
             _rootFolder = folder;
             _serverId = serverId;
+            _config = config;
             _log = new StringBuilder();
         }
 
@@ -40,11 +44,29 @@ namespace FileSync.Common
             }
         }
 
+        private static readonly Dictionary<byte, string> ByteToCmd;
+
+        static TwoWaySyncClientHandler()
+        {
+            ByteToCmd = typeof(Commands).GetFields(BindingFlags.Public | BindingFlags.Static)
+                .Where(x => x.Name.EndsWith("Cmd") && x.FieldType == typeof(byte))
+                .ToDictionary(x => (byte) x.GetValue(null), x => x.Name);
+        }
+
         private async Task ProcessCommands()
         {
             try
             {
                 var cmdHeader = await NetworkHelperSequential.ReadCommandHeader(_networkStream);
+
+                if (!ByteToCmd.TryGetValue(cmdHeader.Command, out var cmdName))
+                    cmdName = "Unknown command";
+
+                var msg = $"Received {cmdName}";
+                if (cmdHeader.PayloadLength > 0)
+                    msg += $" with {cmdHeader.PayloadLength} bytes of payload";
+
+                Msg?.Invoke(msg);
 
                 switch (cmdHeader.Command)
                 {
@@ -67,7 +89,13 @@ namespace FileSync.Common
                         _connected = false;
                         break;
                     case Commands.GetIdCmd:
-                        await ProcessGetidCmd();
+                        await ProcessGetIdCmd();
+                        break;
+                    case Commands.RegisterClientCmd:
+                        await ProcessRegisterClientCmd(cmdHeader);
+                        break;
+                    case Commands.GetClientEndpointsCmd:
+                        await ProcessGetClientEndpointsCmd(cmdHeader);
                         break;
                     default:
                         _connected = false;
@@ -92,7 +120,48 @@ namespace FileSync.Common
             }
         }
 
-        private async Task ProcessGetidCmd()
+        private async Task ProcessGetClientEndpointsCmd(CommandHeader cmdHeader)
+        {
+            var clientIdBytes = await NetworkHelperSequential.ReadBytes(_networkStream, cmdHeader.PayloadLength);
+            var clientId = new Guid(clientIdBytes);
+
+            var ret = new ServerResponseWithData<List<ClientFolderEndpoint>>();
+            var cl = _config.Clients.FirstOrDefault(x => x.Id == clientId);
+            if (cl == null)
+                ret.ErrorMsg = $"Client {clientId} is not registered";
+            else
+                ret.Data = cl.FolderEndpoints;
+
+            await CommandHelper.WriteCommandResponse(_networkStream, Commands.GetClientEndpointsCmd, ret);
+        }
+
+        private async Task ProcessRegisterClientCmd(CommandHeader cmdHeader)
+        {
+            var clientIdBytes = await NetworkHelperSequential.ReadBytes(_networkStream, cmdHeader.PayloadLength);
+            var clientId = new Guid(clientIdBytes);
+
+            var ret = new ServerResponseWithData<bool>();
+
+            var cl = _config.Clients.FirstOrDefault(x => x.Id == clientId);
+            if (cl != null)
+            {
+                ret.Data = true;
+            }
+            else
+            {
+                _config.Clients.Add(new RegisteredClient
+                {
+                    Id = clientId,
+                });
+                _config.Store();
+
+                ret.Data = true;
+            }
+
+            await CommandHelper.WriteCommandResponse(_networkStream, Commands.RegisterClientCmd, ret);
+        }
+
+        private async Task ProcessGetIdCmd()
         {
             var response = new ServerResponseWithData<Guid>();
             try
