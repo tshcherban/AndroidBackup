@@ -17,6 +17,8 @@ namespace FileSync.Common
         private readonly IPEndPoint _endpoint;
         private readonly string _baseDir;
         private readonly string _syncDbDir;
+        private readonly Guid _clientId;
+        private readonly Guid _folderId;
         private readonly string _toRemoveDir;
         private readonly string _newDir;
         private readonly StringBuilder _log = new StringBuilder();
@@ -26,11 +28,13 @@ namespace FileSync.Common
 
         public event Action<string> Log;
 
-        public TwoWaySyncClientImpl(IPEndPoint endpoint, string baseDir, string syncDbDir)
+        public TwoWaySyncClientImpl(IPEndPoint endpoint, string baseDir, string syncDbDir, Guid clientId, Guid folderId)
         {
             _endpoint = endpoint;
             _baseDir = baseDir;
             _syncDbDir = syncDbDir;
+            _clientId = clientId;
+            _folderId = folderId;
             _toRemoveDir = Path.Combine(syncDbDir, "ToRemove");
             _newDir = Path.Combine(syncDbDir, "New");
             _sessionFileHelper = new SessionFileHelper(_newDir, _toRemoveDir, _baseDir, _log);
@@ -161,7 +165,15 @@ namespace FileSync.Common
 
         private async Task<ServerResponseWithData<Guid>> GetSession(Stream networkStream)
         {
-            await NetworkHelperSequential.WriteCommandHeader(networkStream, Commands.GetSessionCmd);
+            var request = new GetSessionRequest
+            {
+                ClientId = _clientId,
+                FolderId = _folderId,
+            };
+            var requestData = Serializer.Serialize(request);
+
+            await NetworkHelperSequential.WriteCommandHeader(networkStream, request.Command, requestData.Length);
+            await NetworkHelperSequential.WriteBytes(networkStream, requestData);
 
             var cmdHeader = await NetworkHelperSequential.ReadCommandHeader(networkStream);
             if (cmdHeader.Command != Commands.GetSessionCmd)

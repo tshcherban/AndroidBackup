@@ -4,35 +4,17 @@
     android:layout_height="match_parent"
     android:minWidth="25px"
     android:minHeight="25px">
-    <!--<TextView
-        android:layout_width="match_parent"
-        android:layout_height="375dp"
-        android:id="@+id/editText1"
-        android:verticalScrollbarPosition="right"
-        android:scrollbars="vertical" />-->
     <Button
         android:text="Add server"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:id="@+id/button3"
         android:layout_alignParentBottom="true" />
-    <Button
-        android:text="Stop"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:id="@+id/button2"
-        android:layout_above="@id/button3" />
-    <Button
-        android:text="Start"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:id="@+id/button1"
-        android:layout_above="@id/button2" />
     <ListView
         android:layout_width="fill_parent"
         android:layout_height="fill_parent"
         android:id="@+id/serverList"
         android:cacheColorHint="#FFDAFF7F"
         android:background="#00DAFF7F"
-        android:layout_above="@id/button1"/>
+        android:layout_above="@id/button3"/>
 </RelativeLayout>

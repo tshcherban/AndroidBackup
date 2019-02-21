@@ -8,10 +8,6 @@ namespace FileSync.Server
     {
         private const int Port = 9211;
 
-        const string Path = @"C:\shcherban\stest";
-        //const string Path = @"H:\SyncTest\Dst";
-        //private const string Path = @"D:\taras\stest";
-
         private static bool _stopping;
 
         private static void ClientHandlerOnMsg(string s)
@@ -28,7 +24,7 @@ namespace FileSync.Server
                 return;
             }
 
-            var server = new SyncServer(Port, Path, ServerId, "config.json");
+            var server = new SyncServer(Port, ServerId, "config.json");
 
             server.Msg += ClientHandlerOnMsg;
 

@@ -6,6 +6,8 @@ namespace FileSync.Android
     {
         public Guid Id { get; }
 
+        public string GetStrId() => Id.ToString("D");
+
         public string DisplayName { get; }
 
         public string LocalPath { get; }

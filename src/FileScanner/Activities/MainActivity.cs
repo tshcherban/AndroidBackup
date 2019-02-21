@@ -5,13 +5,9 @@ using Android.App;
 using Android.Content;
 using Android.Content.PM;
 using Android.OS;
-using Android.Runtime;
 using Android.Views;
 using Android.Widget;
 using FileSync.Android.Model;
-using FileSync.Common;
-using FileSync.Common.Config;
-using Extensions = FileSync.Common.Extensions;
 using Task = System.Threading.Tasks.Task;
 
 namespace FileSync.Android.Activities
@@ -30,12 +26,9 @@ namespace FileSync.Android.Activities
             Manifest.Permission.WriteExternalStorage,
         };
 
-        private TextView _logTextView;
-
         private const int RequestId = 244;
 
         private TaskCompletionSource<bool> _requestPermissionsTaskCompletionSource;
-        private Button _syncBtn;
 
         private readonly ServerCollectionPing _servers;
 
@@ -57,13 +50,6 @@ namespace FileSync.Android.Activities
 
             Window.AddFlags(WindowManagerFlags.KeepScreenOn);
 
-            //_logTextView = FindViewById<TextView>(Resource.Id.editText1);
-            //_logTextView.TextAlignment = TextAlignment.Gravity;
-            //_logTextView.MovementMethod = new ScrollingMovementMethod();
-
-            _syncBtn = FindViewById<Button>(Resource.Id.button1);
-            _syncBtn.Click += SyncBtn_OnClick;
-
             _testBtn = FindViewById<Button>(Resource.Id.button3);
             _testBtn.Click += ServersActivityBtn_OnClick;
 
@@ -71,6 +57,8 @@ namespace FileSync.Android.Activities
             _serverListAdapter = new ServerListAdapter(this, _servers, true);
             _serverListView.Adapter = _serverListAdapter;
             _serverListView.ItemClick += ServerListViewOnItemClick;
+
+            Task.Delay(1000).ContinueWith(t => TryGetPermissionsAsync());
         }
 
         protected override void Dispose(bool disposing)
@@ -112,8 +100,6 @@ namespace FileSync.Android.Activities
             StartActivity(typeof(DiscoverServerActivity));
         }
 
-        private const int ServersActivityRequest = 114;
-
         protected override void OnStop()
         {
             System.Diagnostics.Debugger.Log(0, "", ">>>>>> OnStop\r\n");
@@ -142,30 +128,6 @@ namespace FileSync.Android.Activities
         {
             System.Diagnostics.Debugger.Log(0, "", ">>>>>> OnPause\r\n");
             base.OnPause();
-        }
-
-        protected override void OnNewIntent(Intent intent)
-        {
-            base.OnNewIntent(intent);
-        }
-
-        /*protected override void OnActivityResult(int requestCode, [GeneratedEnum] Result resultCode, Intent data)
-        {
-            base.OnActivityResult(requestCode, resultCode, data);
-
-            if (requestCode == ServersActivityRequest)
-            {
-                if (resultCode == Result.Ok)
-                {
-                    AppendLog(data.Extras.GetString("server"));
-                }
-            }
-        }*/
-
-        private void AppendLog(string msg)
-        {
-            //RunOnUiThread(() => { _logTextView.Text = $"{msg}\r\n{_logTextView.Text}"; });
-            System.Diagnostics.Debugger.Log(0, "", $">>>>>>> {msg}\r\n");
         }
 
         private async Task<bool> TryGetPermissionsAsync()
@@ -198,56 +160,6 @@ namespace FileSync.Android.Activities
             if (requestCode == RequestId)
             {
                 _requestPermissionsTaskCompletionSource.SetResult(grantResults[0] == Permission.Granted);
-            }
-        }
-
-        private async void SyncBtn_OnClick(object sender, EventArgs e)
-        {
-            _syncBtn.Enabled = false;
-
-            try
-            {
-                var res = await TryGetPermissionsAsync();
-                if (!res)
-                {
-                    Toast.MakeText(this, "Storage permission denied.", ToastLength.Short).Show();
-
-                    return;
-                }
-
-                /*var config = _configStore.ReadClientOrDefault();
-                if (config.Pairs == null || config.Pairs.Count == 0)
-                {
-                    Toast.MakeText(this, "No sync pair found.", ToastLength.Short).Show();
-
-                    return;
-                }
-*/
-
-                //SyncPairConfigModel pair = config.Pairs[0];
-
-                //const string dir = @"/mnt/sdcard";
-                //const string dir = @"/storage/emulated/0/stest/";
-                const string dir = @"/storage/emulated/0/Download/";
-                //const string dir = @"/storage/emulated/0/DCIM/";
-
-                var pair = new SyncPairConfigModel
-                {
-                    BaseDir = dir,
-                    DbDir = dir + ".sync",
-                    ServerAddress = "10.0.2.2:9211",
-                    SyncMode = SyncMode.TwoWay,
-                };
-
-                var client = SyncClientFactory.GetTwoWay(Extensions.ParseEndpoint(pair.ServerAddress), pair.BaseDir, pair.DbDir);
-
-                client.Log += AppendLog;
-
-                await client.Sync();
-            }
-            finally
-            {
-                _syncBtn.Enabled = true;
             }
         }
     }

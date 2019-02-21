@@ -5,22 +5,22 @@
     android:minWidth="25px"
     android:minHeight="25px">
     <Button
-        android:text="Remove server"
+        android:text="Add"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:id="@+id/serverViewRemoveServerBtn"
+        android:id="@+id/folderAddViewAddFolderBtn"
         android:layout_alignParentBottom="true" />
-    <Button
-        android:text="Remove server"
+    <EditText
+        android:minLines="1"
+        android:maxLines="1"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:id="@+id/serverViewAddFolderBtn"
-        android:layout_above="@id/serverViewRemoveServerBtn" />
-    <ListView
-        android:layout_width="fill_parent"
-        android:layout_height="fill_parent"
-        android:id="@+id/serverViewFolderListView"
-        android:cacheColorHint="#FFDAFF7F"
-        android:background="#00DAFF7F"
-        android:layout_above="@id/serverViewAddFolderBtn" />
+        android:id="@+id/folderAddViewNameEdit"
+        android:layout_alignParentTop="true" />
+    <EditText
+        android:editable="true"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:id="@+id/folderAddViewPathEdit"
+        android:layout_below="@id/folderAddViewNameEdit" />
 </RelativeLayout>

@@ -1,19 +1,21 @@
 ﻿ using System.Linq;
 using System.Threading.Tasks;
 using Android.App;
-using Android.OS;
+ using Android.Content;
+ using Android.OS;
 using Android.Widget;
 using FileSync.Android.Model;
 
 namespace FileSync.Android.Activities
 {
-    [Activity(Label = "ServerViewActivity")]
+    [Activity(Label = "FolderListScanActivity")]
     public sealed class FolderListScanActivity : Activity
     {
+        private readonly FolderCollection _folders;
+
         private string _serverUrl;
         private ServerConfigItem _serverItem;
         private FolderListAdapter _foldersAdapter;
-        private FolderCollection _folders;
         private ListView _foldersListView;
 
         public FolderListScanActivity()
@@ -34,8 +36,20 @@ namespace FileSync.Android.Activities
 
             _foldersListView = FindViewById<ListView>(Resource.Id.folderListScanViewFolderListView);
             _foldersListView.Adapter = _foldersAdapter;
+            _foldersListView.ItemClick += FoldersListViewOnItemClick;
 
             Task.Run(ScanServerFolders);
+        }
+
+        private void FoldersListViewOnItemClick(object sender, AdapterView.ItemClickEventArgs e)
+        {
+            var item = _folders.Items[e.Position];
+            var intent = new Intent(this, typeof(FolderAddActivity));
+            intent.PutExtra("name", item.DisplayName);
+            intent.PutExtra("server", _serverUrl);
+            intent.PutExtra("folderId", item.Id.ToString("D"));
+
+            StartActivity(intent);
         }
 
         private async Task ScanServerFolders()

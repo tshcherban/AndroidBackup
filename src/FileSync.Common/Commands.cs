@@ -48,6 +48,16 @@ namespace FileSync.Common
     }
 
     [Serializable]
+    public class GetSessionRequest
+    {
+        public readonly byte Command = Commands.GetSessionCmd;
+
+        public Guid ClientId { get; set; }
+
+        public Guid FolderId { get; set; }
+    }
+
+    [Serializable]
     public abstract class CommandHeaderWithData<T>
     {
         private T _data;

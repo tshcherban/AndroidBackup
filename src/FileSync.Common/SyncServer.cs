@@ -8,7 +8,6 @@ namespace FileSync.Common
     public class SyncServer
     {
         private readonly int _port;
-        private readonly string _syncDir;
         private readonly Guid _id;
         private readonly object _lock = new object(); // sync lock 
         private readonly List<Task> _connections = new List<Task>(); // pending connections
@@ -20,10 +19,9 @@ namespace FileSync.Common
 
         public event Action<string> Msg;
 
-        public SyncServer(int port, string syncDir, Guid id, string configFilePath)
+        public SyncServer(int port, Guid id, string configFilePath)
         {
             _port = port;
-            _syncDir = syncDir;
             _id = id;
             _config = new JsonFileServerConfig(configFilePath);
         }
@@ -148,7 +146,7 @@ namespace FileSync.Common
         {
             await Task.Yield();
 
-            using (var clientHandler = new TwoWaySyncClientHandler(tcpClient, _syncDir, _id, _config))
+            using (var clientHandler = new TwoWaySyncClientHandler(tcpClient, _id, _config))
             {
                 clientHandler.Msg += ClientHandlerOnMsg;
                 await clientHandler.Process();

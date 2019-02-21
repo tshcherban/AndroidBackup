@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:minWidth="25px"
+    android:minHeight="25px">
+    <TextView
+        android:text="name"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginLeft="8px"
+        android:layout_marginRight="8px"
+        android:layout_marginTop="0px"
+        android:layout_marginBottom="0px"
+        android:textSize="20sp"
+        android:id="@+id/folderViewNameView"
+        android:layout_alignParentTop="true" />
+    <TextView
+        android:text="path"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginLeft="8px"
+        android:layout_marginRight="8px"
+        android:layout_marginTop="0px"
+        android:layout_marginBottom="0px"
+        android:textSize="10sp"
+        android:id="@+id/folderViewPathView"
+        android:layout_below="@id/folderViewNameView" />
+
+    <Button
+        android:text="Delete folder"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:id="@+id/folderViewDeleteFolderBtn"
+        android:layout_alignParentBottom="true" />
+    <Button
+        android:text="Start"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:id="@+id/folderViewStartSyncBtn"
+        android:layout_above="@id/folderViewDeleteFolderBtn" />
+
+    <TextView
+        android:background="#55FFFFFF"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:verticalScrollbarPosition="right"
+        android:scrollbars="vertical"
+        android:textAlignment="gravity"
+        android:id="@+id/folderViewLogTxtView"
+        android:layout_below="@id/folderViewPathView"
+        android:layout_above="@id/folderViewStartSyncBtn"/>
+</RelativeLayout>

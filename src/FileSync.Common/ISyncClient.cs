@@ -12,14 +12,14 @@ namespace FileSync.Common
             return new OneWaySyncClientImpl(serverAddress, serverPort, baseDir);
         }*/
 
-        public static ISyncClient GetTwoWay(IPEndPoint endpoint, string baseDir, string syncDbDir = null)
+        public static ISyncClient GetTwoWay(IPEndPoint endpoint, string baseDir, string syncDbDir, Guid clientId, Guid folderId)
         {
             if (string.IsNullOrEmpty(syncDbDir))
             {
                 syncDbDir = Path.Combine(baseDir, ".sync");
             }
 
-            return new TwoWaySyncClientImpl(endpoint, baseDir, syncDbDir);
+            return new TwoWaySyncClientImpl(endpoint, baseDir, syncDbDir, clientId, folderId);
         }
     }
 

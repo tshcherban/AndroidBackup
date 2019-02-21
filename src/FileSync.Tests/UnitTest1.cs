@@ -79,13 +79,13 @@ namespace FileSync.Tests
         [TestMethod]
         public void TwoWaySync_Test()
         {
-            var server = new SyncServer(9211, @"D:\Taras\stest", Guid.NewGuid(), "config.json");
+            var server = new SyncServer(9211, Guid.NewGuid(), "config.json");
 
             server.Msg += Console.WriteLine;
 
             server.Start();
 
-            var client = SyncClientFactory.GetTwoWay(new IPEndPoint(IPAddress.Parse("127.0.0.1"), 9211), @"D:\Taras\stestsrc");
+            var client = SyncClientFactory.GetTwoWay(new IPEndPoint(IPAddress.Parse("127.0.0.1"), 9211), @"D:\Taras\stestsrc", null, Guid.Empty, Guid.Empty);
             client.Sync().Wait();
 
             server.Stop();

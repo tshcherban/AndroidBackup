@@ -53,6 +53,13 @@ namespace FileSync.Android.Activities
             _foldersListView.ItemClick += FolderListViewOnItemClick;
         }
 
+        protected override void OnResume()
+        {
+            base.OnResume();
+
+            _folders.SetServerListFromConfig(_serverItem.Folders);
+        }
+
         private void AddFolderBtn_Click(object sender, EventArgs e)
         {
             var intent = new Intent(this, typeof(FolderListScanActivity));
@@ -62,7 +69,12 @@ namespace FileSync.Android.Activities
 
         private void FolderListViewOnItemClick(object sender, AdapterView.ItemClickEventArgs e)
         {
-            
+            var folder = _serverItem.Folders[e.Position];
+
+            var intent = new Intent(this, typeof(FolderViewActivity));
+            intent.PutExtra("server", _serverUrl);
+            intent.PutExtra("folderId", folder.GetStrId());
+            StartActivity(intent);
         }
 
         private async void RemoveServerBtn_Click(object sender, EventArgs e)

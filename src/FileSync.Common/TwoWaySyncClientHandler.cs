@@ -13,7 +13,6 @@ namespace FileSync.Common
     public sealed class TwoWaySyncClientHandler : IDisposable
     {
         private readonly TcpClient _tcpClient;
-        private readonly string _rootFolder;
         private readonly Guid _serverId;
         private readonly IServerConfig _config;
         private NetworkStream _networkStream;
@@ -23,10 +22,9 @@ namespace FileSync.Common
 
         private readonly StringBuilder _log;
 
-        public TwoWaySyncClientHandler(TcpClient tcpClient, string folder, Guid serverId, IServerConfig config)
+        public TwoWaySyncClientHandler(TcpClient tcpClient, Guid serverId, IServerConfig config)
         {
             _tcpClient = tcpClient;
-            _rootFolder = folder;
             _serverId = serverId;
             _config = config;
             _log = new StringBuilder();
@@ -71,7 +69,7 @@ namespace FileSync.Common
                 switch (cmdHeader.Command)
                 {
                     case Commands.GetSessionCmd:
-                        await ProcessGetSessionCmd();
+                        await ProcessGetSessionCmd(cmdHeader);
                         break;
                     case Commands.GetSyncListCmd:
                         await ProcessGetSyncListCmd(cmdHeader);
@@ -130,7 +128,13 @@ namespace FileSync.Common
             if (cl == null)
                 ret.ErrorMsg = $"Client {clientId} is not registered";
             else
-                ret.Data = cl.FolderEndpoints;
+                ret.Data = cl.FolderEndpoints
+                    .Select(x => new ClientFolderEndpoint
+                    {
+                        DisplayName = x.DisplayName,
+                        Id = x.Id
+                    })
+                    .ToList();
 
             await CommandHelper.WriteCommandResponse(_networkStream, Commands.GetClientEndpointsCmd, ret);
         }
@@ -176,14 +180,17 @@ namespace FileSync.Common
             await CommandHelper.WriteCommandResponse(_networkStream, Commands.GetIdCmd, response);
         }
 
-        private async Task ProcessGetSessionCmd()
+        private async Task ProcessGetSessionCmd(CommandHeader header)
         {
             var response = new ServerResponseWithData<Guid>();
             try
             {
+                var req = await NetworkHelperSequential.Read<GetSessionRequest>(_networkStream, header.PayloadLength);
+                var client = _config.Clients.Single(x => x.Id == req.ClientId);
+                var folder = client.FolderEndpoints.Single(x => x.Id == req.FolderId);
                 var session = SessionStorage.Instance.GetNewSession();
-                session.BaseDir = _rootFolder;
-                session.SyncDbDir = Path.Combine(session.BaseDir, ".sync");
+                session.BaseDir = folder.LocalPath;
+                session.SyncDbDir = Path.Combine(folder.LocalPath, ".sync");
                 if (!Directory.Exists(session.SyncDbDir))
                 {
                     var dirInfo = Directory.CreateDirectory(session.SyncDbDir);
