@@ -65,28 +65,36 @@ namespace FileSync.Android.Model
 
             Task.Run(async () =>
             {
-                try
+                while (_pingRunning && !token.Value.IsCancellationRequested)
                 {
-                    while (_pingRunning && !token.Value.IsCancellationRequested)
+                    await Task.Delay(1000, token.Value);
+                    if (!_pingRunning || token.Value.IsCancellationRequested)
+                        break;
+
+                    if (itemsList.Count == 0)
+                        continue;
+
+                    try
                     {
-                        await Task.Delay(1000, token.Value);
-                        if (!_pingRunning || token.Value.IsCancellationRequested)
-                            break;
-
-                        if (itemsList.Count == 0)
-                            continue;
-
                         var changed = false;
 
-                        foreach (var server in itemsList)
+                        for (var index = itemsList.Count - 1; index >= 0; index--)
+                        {
+                            var server = itemsList[index];
                             changed |= await DoPing(server);
+                        }
 
                         if (changed)
                             OnDataUpdated();
                     }
-                }
-                catch (TaskCanceledException)
-                {
+                    catch (TaskCanceledException)
+                    {
+                        break;
+                    }
+                    catch (Exception)
+                    {
+                        await Task.Delay(5000, token.Value);
+                    }
                 }
 
                 _pingRunning = false;
