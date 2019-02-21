@@ -7,7 +7,7 @@ using System.Threading.Tasks;
 using FileSync.Android.Model;
 using FileSync.Common;
 
-namespace FileSync.Android
+namespace FileSync.Android.Helpers
 {
     public class ServerCommunicator
     {

@@ -29,6 +29,8 @@ namespace FileSync.Common
 
         public event Action<string> Log;
 
+        public event Action End;
+
         public TwoWaySyncClientImpl(IPEndPoint endpoint, string baseDir, string syncDbDir, Guid clientId, Guid folderId)
         {
             _endpoint = endpoint;
@@ -45,7 +47,7 @@ namespace FileSync.Common
         {
             try
             {
-                using (var client = new TcpClient{ReceiveTimeout = OperationsTimeout, SendTimeout = OperationsTimeout})
+                using (var client = new TcpClient {ReceiveTimeout = OperationsTimeout, SendTimeout = OperationsTimeout})
                 {
                     var success = await client.ConnectAsync(_endpoint.Address, _endpoint.Port).WhenOrTimeout(OperationsTimeout);
                     if (!success)
@@ -57,113 +59,139 @@ namespace FileSync.Common
                     _networkStream = client.GetStream();
                     using (_networkStream)
                     {
-                        var request = new GetSessionRequest
-                        {
-                            ClientId = _clientId,
-                            EndpointId = _folderId,
-                        };
-
-                        var sessionId = await request.Send(_networkStream);
-                        if (sessionId.HasError)
-                        {
-                            Log?.Invoke($"Unable to create sync session. Server response was '{sessionId.ErrorMsg}'");
-                            return;
-                        }
-
-                        _sessionId = sessionId.Data;
-
-                        if (!Directory.Exists(_syncDbDir))
-                        {
-                            var dirInfo = Directory.CreateDirectory(_syncDbDir);
-                            dirInfo.Attributes = dirInfo.Attributes | FileAttributes.Hidden;
-                        }
-
-                        var syncDb = GetLocalSyncDb(out var error);
-                        if (syncDb == null)
-                        {
-                            Log?.Invoke(error);
-                            return;
-                        }
-
-                        var syncList = await GetSyncList(_sessionId, syncDb.Files);
-                        if (syncList.HasError)
-                        {
-                            Log?.Invoke($"Unable to get sync list. Server response was '{syncList.ErrorMsg}'");
-                            return;
-                        }
-
-                        PathHelpers.NormalizeRelative(syncList.Data.ToDownload, syncList.Data.ToUpload, syncList.Data.ToRemove);
-
-                        PathHelpers.EnsureDirExists(_toRemoveDir);
-                        PathHelpers.EnsureDirExists(_newDir);
-
-                        foreach (var fileInfo in syncList.Data.ToRemove)
-                        {
-                            _sessionFileHelper.PrepareForRemove(fileInfo.RelativePath);
-
-                            var fi = syncDb.Files.First(x => x.RelativePath == fileInfo.RelativePath);
-                            syncDb.Files.Remove(fi);
-                        }
-
-                        if (!await ReceiveFiles(syncList.Data.ToDownload, syncDb))
-                            return;
-
-                        if (!await SendFiles(syncList.Data.ToUpload, syncDb))
-                            return;
-
-                        var response = await FinishServerSession(_sessionId);
-                        if (response.HasError)
-                        {
-                            Log?.Invoke($"Error finishing session. Server response was '{response.ErrorMsg}'");
-
-                            return;
-                        }
-
-                        _sessionFileHelper.FinishSession();
-
-                        syncDb.Files.RemoveAll(x => x.State == SyncFileState.Deleted);
-
-                        foreach (var tu in syncList.Data.ToUpload.Where(x => !string.IsNullOrEmpty(x.NewRelativePath)))
-                        {
-                            var fi = syncDb.Files.FirstOrDefault(x => x.RelativePath == tu.RelativePath);
-                            if (fi != null)
-                            {
-                                fi.RelativePath = tu.NewRelativePath;
-                            }
-                            else
-                                Debugger.Break();
-                        }
-
-                        foreach (var f in syncDb.Files)
-                        {
-                            f.State = SyncFileState.NotChanged;
-                        }
-
-                        syncDb.Store(_syncDbDir);
-
-                        File.WriteAllText(Path.Combine(_syncDbDir, $"sync-{DateTime.Now:dd-MM-yyyy_hh-mm-ss}.log"), _log.ToString());
-
-                        if (new DirectoryInfo(_newDir).EnumerateFiles("*", SearchOption.AllDirectories).Any())
-                        {
-                            Debugger.Break(); // all files should be removed by now
-                        }
-
-                        if (new DirectoryInfo(_toRemoveDir).EnumerateFiles("*", SearchOption.AllDirectories).Any())
-                        {
-                            Debugger.Break(); // all files should be removed by now
-                        }
-
-                        Directory.Delete(_newDir, true);
-
-                        Directory.Delete(_toRemoveDir, true);
-
-                        await NetworkHelper.WriteCommandHeader(_networkStream, Commands.DisconnectCmd);
+                        await DoSync();
                     }
                 }
             }
             catch (Exception e)
             {
                 Log?.Invoke($"Error during sync {e}");
+            }
+
+            End?.Invoke();
+        }
+
+        private async Task DoSync()
+        {
+            var request = new GetSessionRequest
+            {
+                ClientId = _clientId,
+                EndpointId = _folderId,
+            };
+
+            var sessionId = await request.Send(_networkStream);
+            if (sessionId.HasError)
+            {
+                Log?.Invoke($"Unable to create sync session. Server response was '{sessionId.ErrorMsg}'");
+                return;
+            }
+
+            _sessionId = sessionId.Data;
+
+            if (!Directory.Exists(_syncDbDir))
+            {
+                var dirInfo = Directory.CreateDirectory(_syncDbDir);
+                dirInfo.Attributes = dirInfo.Attributes | FileAttributes.Hidden;
+            }
+
+            Log?.Invoke("Scanning directory");
+
+            var syncDb = GetLocalSyncDb(out var error);
+            if (syncDb == null)
+            {
+                Log?.Invoke(error);
+                return;
+            }
+
+            Log?.Invoke("Waiting server sync list");
+
+            var syncList = await GetSyncList(_sessionId, syncDb.Files);
+            if (syncList.HasError)
+            {
+                Log?.Invoke($"Unable to get sync list. Server response was '{syncList.ErrorMsg}'");
+                return;
+            }
+
+            PathHelpers.NormalizeRelative(syncList.Data.ToDownload, syncList.Data.ToUpload, syncList.Data.ToRemove);
+
+            PathHelpers.EnsureDirExists(_toRemoveDir);
+            PathHelpers.EnsureDirExists(_newDir);
+
+            PrepareRemoveFiles(syncList, syncDb);
+
+            if (!await ReceiveFiles(syncList.Data.ToDownload, syncDb))
+                return;
+
+            if (!await SendFiles(syncList.Data.ToUpload, syncDb))
+                return;
+
+            Log?.Invoke("Finishing server session");
+
+            var response = await FinishServerSession(_sessionId);
+            if (response.HasError)
+            {
+                Log?.Invoke($"Error finishing session. Server response was '{response.ErrorMsg}'");
+
+                return;
+            }
+
+            Log?.Invoke("Committing local changes");
+            _sessionFileHelper.FinishSession();
+
+            syncDb.Files.RemoveAll(x => x.State == SyncFileState.Deleted);
+
+            foreach (var tu in syncList.Data.ToUpload.Where(x => !string.IsNullOrEmpty(x.NewRelativePath)))
+            {
+                var fi = syncDb.Files.FirstOrDefault(x => x.RelativePath == tu.RelativePath);
+                if (fi != null)
+                {
+                    fi.RelativePath = tu.NewRelativePath;
+                }
+                else
+                    Debugger.Break();
+            }
+
+            foreach (var f in syncDb.Files)
+            {
+                f.State = SyncFileState.NotChanged;
+            }
+
+            syncDb.Store(_syncDbDir);
+
+            File.WriteAllText(Path.Combine(_syncDbDir, $"sync-{DateTime.Now:dd-MM-yyyy_hh-mm-ss}.log"), _log.ToString());
+
+            if (new DirectoryInfo(_newDir).EnumerateFiles("*", SearchOption.AllDirectories).Any())
+            {
+                Debugger.Break(); // all files should be removed by now
+            }
+
+            if (new DirectoryInfo(_toRemoveDir).EnumerateFiles("*", SearchOption.AllDirectories).Any())
+            {
+                Debugger.Break(); // all files should be removed by now
+            }
+
+            Directory.Delete(_newDir, true);
+
+            Directory.Delete(_toRemoveDir, true);
+
+            await NetworkHelper.WriteCommandHeader(_networkStream, Commands.DisconnectCmd);
+
+            Log?.Invoke("Done");
+        }
+
+        private void PrepareRemoveFiles(ServerResponseWithData<SyncInfo> syncList, SyncDatabase syncDb)
+        {
+            if (syncList.Data.ToRemove.Count > 0)
+                Log?.Invoke($"Marking for remove {syncList.Data.ToRemove.Count} files");
+
+            foreach (var fileInfo in syncList.Data.ToRemove)
+            {
+                Log?.Invoke($"Remove {fileInfo.RelativePath}");
+
+                _sessionFileHelper.PrepareForRemove(fileInfo.RelativePath);
+
+                var fi = syncDb.Files.First(x => x.RelativePath == fileInfo.RelativePath);
+                syncDb.Files.Remove(fi);
             }
         }
 
@@ -187,13 +215,16 @@ namespace FileSync.Common
             return response;
         }
 
-        private async Task<bool> SendFiles(List<SyncFileInfo> dataToUpload, SyncDatabase syncDb)
+        private async Task<bool> SendFiles(IReadOnlyCollection<SyncFileInfo> dataToUpload, SyncDatabase syncDb)
         {
-            Log?.Invoke($"Going to upload {dataToUpload.Count} files");
+            if (dataToUpload.Count > 0)
+                Log?.Invoke($"About to upload {dataToUpload.Count} files");
+
             var done = 1;
             foreach (var fileInfo in dataToUpload)
             {
                 Log?.Invoke($"Uploading {done++}");
+
                 var filePath = Path.Combine(_baseDir, fileInfo.RelativePath);
                 var fileLength = new FileInfo(filePath).Length;
 
@@ -216,10 +247,15 @@ namespace FileSync.Common
             return true;
         }
 
-        private async Task<bool> ReceiveFiles(IEnumerable<SyncFileInfo> dataToDownload, SyncDatabase syncDb)
+        private async Task<bool> ReceiveFiles(IReadOnlyCollection<SyncFileInfo> dataToDownload, SyncDatabase syncDb)
         {
+            if (dataToDownload.Count > 0)
+                Log?.Invoke($"About to receive {dataToDownload.Count} files from server");
+
             foreach (var fileInfo in dataToDownload)
             {
+                Log?.Invoke($"Receiving {fileInfo.RelativePath}");
+
                 var getFileRequest = new GetFileRequest
                 {
                     SessionId = _sessionId,

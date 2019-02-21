@@ -1,18 +1,13 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.Linq;
-using System.Text;
-
 using Android.App;
-using Android.Content;
 using Android.OS;
-using Android.Runtime;
-using Android.Views;
 using Android.Widget;
+using FileSync.Android.Model;
 
 namespace FileSync.Android.Activities
 {
-    [Activity(Label = "FolderAddActivity")]
+    [Activity(Label = "Add folder")]
     public sealed class FolderAddActivity : Activity
     {
         private EditText _nameEdit;

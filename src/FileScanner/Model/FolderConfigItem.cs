@@ -1,6 +1,6 @@
 ﻿using System;
 
-namespace FileSync.Android
+namespace FileSync.Android.Model
 {
     public class FolderConfigItem
     {

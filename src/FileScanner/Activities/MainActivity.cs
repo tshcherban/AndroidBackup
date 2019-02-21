@@ -12,7 +12,7 @@ using Task = System.Threading.Tasks.Task;
 
 namespace FileSync.Android.Activities
 {
-    [Activity(Label = "FileScanner", MainLauncher = true)]
+    [Activity(Label = "Server list", MainLauncher = true)]
     public class MainActivity : Activity
     {
         private const int PermissionsTimeout = 10000;

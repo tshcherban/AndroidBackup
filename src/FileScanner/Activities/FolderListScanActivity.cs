@@ -1,14 +1,15 @@
-﻿ using System.Linq;
+﻿using System.Linq;
 using System.Threading.Tasks;
 using Android.App;
- using Android.Content;
- using Android.OS;
+using Android.Content;
+using Android.OS;
 using Android.Widget;
+using FileSync.Android.Helpers;
 using FileSync.Android.Model;
 
 namespace FileSync.Android.Activities
 {
-    [Activity(Label = "FolderListScanActivity")]
+    [Activity(Label = "Discover server folders")]
     public sealed class FolderListScanActivity : Activity
     {
         private readonly FolderCollection _folders;
@@ -58,7 +59,7 @@ namespace FileSync.Android.Activities
 
             var comm = new ServerCommunicator();
             var folders = await comm.GetFolders(FileSyncApp.Instance.Config.ClientId, ep.Address, ep.Port);
-            
+
             _folders.SetList(folders);
         }
     }

@@ -9,7 +9,7 @@ using FileSync.Android.Model;
 
 namespace FileSync.Android.Activities
 {
-    [Activity(Label = "DiscoverServerActivity")]
+    [Activity(Label = "Discover nearby servers")]
     public class DiscoverServerActivity : Activity
     {
         private ListView _serverListView;

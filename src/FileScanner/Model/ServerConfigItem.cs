@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 
-namespace FileSync.Android
+namespace FileSync.Android.Model
 {
     public class ServerConfigItem
     {

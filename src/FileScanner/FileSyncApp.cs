@@ -1,12 +1,15 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Threading;
 using Android.App;
 using Android.Runtime;
 using FileSync.Android.Model;
+using FileSync.Common;
 
 namespace FileSync.Android
 {
     [Application]
+    // ReSharper disable once ClassNeverInstantiated.Global
     public sealed class FileSyncApp : Application, IServiceLocator
     {
         internal static IServiceLocator Instance { get; private set; }
@@ -48,6 +51,8 @@ namespace FileSync.Android
 
         public IConfig Config { get; }
         
+        public Dictionary<Guid, ISyncClient> ActiveClients { get; } = new Dictionary<Guid, ISyncClient>();
+
         public void Stop()
         {
             _appShutdownTokenSrc.Cancel(false);

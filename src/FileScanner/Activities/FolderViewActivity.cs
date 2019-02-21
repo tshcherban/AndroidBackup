@@ -1,15 +1,17 @@
 ﻿using System;
 using System.Linq;
+using System.Threading.Tasks;
 using Android.App;
 using Android.OS;
 using Android.Text.Method;
 using Android.Views;
 using Android.Widget;
+using FileSync.Android.Model;
 using FileSync.Common;
 
 namespace FileSync.Android.Activities
 {
-    [Activity(Label = "FolderViewActivity")]
+    [Activity(Label = "Folder sync status")]
     public class FolderViewActivity : Activity
     {
         private string _serverUrl;
@@ -18,6 +20,7 @@ namespace FileSync.Android.Activities
         private FolderConfigItem _folderItem;
         private TextView _logTxtView;
         private Button _syncBtn;
+        private ISyncClient _client;
 
         protected override void OnCreate(Bundle savedInstanceState)
         {
@@ -43,6 +46,11 @@ namespace FileSync.Android.Activities
 
             var btn = FindViewById<Button>(Resource.Id.folderViewDeleteFolderBtn);
             btn.Click += DeleteFolderBtn_Click;
+
+            if (FileSyncApp.Instance.ActiveClients.TryGetValue(_folderId, out var client))
+            {
+                _client = client;
+            }
         }
 
         private void DeleteFolderBtn_Click(object sender, EventArgs e)
@@ -58,18 +66,35 @@ namespace FileSync.Android.Activities
 
             try
             {
+                _client = SyncClientFactory.GetTwoWay(Common.Extensions.ParseEndpoint(_serverUrl), _folderItem.LocalPath, null, FileSyncApp.Instance.Config.ClientId, _folderItem.Id);
 
+                FileSyncApp.Instance.ActiveClients[_folderId] = _client; // TODO
 
-                var client = SyncClientFactory.GetTwoWay(Common.Extensions.ParseEndpoint(_serverUrl), _folderItem.LocalPath, null, FileSyncApp.Instance.Config.ClientId, _folderItem.Id);
+                _client.Log += AppendLog;
 
-                client.Log += AppendLog;
-
-                await client.Sync();
+                await Task.Run(_client.Sync);
             }
             finally
             {
                 _syncBtn.Enabled = true;
+                _client = null;
             }
+        }
+
+        protected override void OnStop()
+        {
+            base.OnPause();
+
+            if (_client != null)
+                _client.Log -= AppendLog;
+        }
+
+        protected override void OnResume()
+        {
+            base.OnResume();
+
+            if (_client != null)
+                _client.Log += AppendLog;
         }
 
         private void AppendLog(string msg)

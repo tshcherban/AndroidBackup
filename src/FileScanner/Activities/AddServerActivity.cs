@@ -4,10 +4,11 @@ using System.Net;
 using Android.App;
 using Android.OS;
 using Android.Widget;
+using FileSync.Android.Helpers;
 
 namespace FileSync.Android.Activities
 {
-    [Activity(Label = "AddServerActivity")]
+    [Activity(Label = "Add server")]
     public sealed class AddServerActivity : Activity
     {
         private Button _addServerBtn;
