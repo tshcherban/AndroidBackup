@@ -26,6 +26,13 @@ namespace FileSync.Common
             _config = new JsonFileServerConfig(configFilePath);
         }
 
+        public SyncServer(int port, Guid id, IServerConfig config)
+        {
+            _port = port;
+            _id = id;
+            _config = config;
+        }
+
         public void Stop()
         {
             try

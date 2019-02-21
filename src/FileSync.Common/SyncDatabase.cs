@@ -49,7 +49,7 @@ namespace FileSync.Common
                 }
 
                 {
-                    var hash = NetworkHelperSequential.HashFileAsync(new FileInfo(i)).Result;
+                    var hash = NetworkHelper.HashFileAsync(new FileInfo(i)).Result;
 
                     return new SyncFileInfo
                     {

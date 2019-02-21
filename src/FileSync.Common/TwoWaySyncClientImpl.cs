@@ -12,7 +12,7 @@ namespace FileSync.Common
 {
     internal sealed class TwoWaySyncClientImpl : ISyncClient
     {
-        private const int OperationsTimeout = 15000;
+        private const int OperationsTimeout = 5000;
 
         private readonly IPEndPoint _endpoint;
         private readonly string _baseDir;
@@ -25,6 +25,7 @@ namespace FileSync.Common
         private readonly SessionFileHelper _sessionFileHelper;
 
         private Guid _sessionId;
+        private NetworkStream _networkStream;
 
         public event Action<string> Log;
 
@@ -53,9 +54,16 @@ namespace FileSync.Common
                         return;
                     }
 
-                    using (var networkStream = client.GetStream())
+                    _networkStream = client.GetStream();
+                    using (_networkStream)
                     {
-                        var sessionId = await GetSession(networkStream);
+                        var request = new GetSessionRequest
+                        {
+                            ClientId = _clientId,
+                            EndpointId = _folderId,
+                        };
+
+                        var sessionId = await request.Send(_networkStream);
                         if (sessionId.HasError)
                         {
                             Log?.Invoke($"Unable to create sync session. Server response was '{sessionId.ErrorMsg}'");
@@ -77,7 +85,7 @@ namespace FileSync.Common
                             return;
                         }
 
-                        var syncList = await GetSyncList(networkStream, _sessionId, syncDb.Files);
+                        var syncList = await GetSyncList(_sessionId, syncDb.Files);
                         if (syncList.HasError)
                         {
                             Log?.Invoke($"Unable to get sync list. Server response was '{syncList.ErrorMsg}'");
@@ -97,17 +105,13 @@ namespace FileSync.Common
                             syncDb.Files.Remove(fi);
                         }
 
-                        if (!await ReceiveFiles(networkStream, syncList.Data.ToDownload, syncDb))
-                        {
+                        if (!await ReceiveFiles(syncList.Data.ToDownload, syncDb))
                             return;
-                        }
 
-                        if (!await SendFiles(networkStream, syncList.Data.ToUpload, syncDb))
-                        {
+                        if (!await SendFiles(syncList.Data.ToUpload, syncDb))
                             return;
-                        }
 
-                        var response = await FinishServerSession(networkStream, _sessionId);
+                        var response = await FinishServerSession(_sessionId);
                         if (response.HasError)
                         {
                             Log?.Invoke($"Error finishing session. Server response was '{response.ErrorMsg}'");
@@ -153,7 +157,7 @@ namespace FileSync.Common
 
                         Directory.Delete(_toRemoveDir, true);
 
-                        await NetworkHelperSequential.WriteCommandHeader(networkStream, Commands.DisconnectCmd);
+                        await NetworkHelper.WriteCommandHeader(_networkStream, Commands.DisconnectCmd);
                     }
                 }
             }
@@ -163,56 +167,27 @@ namespace FileSync.Common
             }
         }
 
-        private async Task<ServerResponseWithData<Guid>> GetSession(Stream networkStream)
-        {
-            var request = new GetSessionRequest
-            {
-                ClientId = _clientId,
-                FolderId = _folderId,
-            };
-            var requestData = Serializer.Serialize(request);
-
-            await NetworkHelperSequential.WriteCommandHeader(networkStream, request.Command, requestData.Length);
-            await NetworkHelperSequential.WriteBytes(networkStream, requestData);
-
-            var cmdHeader = await NetworkHelperSequential.ReadCommandHeader(networkStream);
-            if (cmdHeader.Command != Commands.GetSessionCmd)
-            {
-                return new ServerResponseWithData<Guid> { ErrorMsg = "Wrong command received" };
-            }
-
-            if (cmdHeader.PayloadLength == 0)
-            {
-                return new ServerResponseWithData<Guid> { ErrorMsg = "No data received" };
-            }
-
-            var responseBytes = await NetworkHelperSequential.ReadBytes(networkStream, cmdHeader.PayloadLength);
-            var response = Serializer.Deserialize<ServerResponseWithData<Guid>>(responseBytes);
-
-            return response;
-        }
-
-        private async Task<ServerResponse> FinishServerSession(Stream networkStream, Guid sessionId)
+        private async Task<ServerResponse> FinishServerSession(Guid sessionId)
         {
             var cmdDataBytes = Serializer.Serialize(sessionId);
 
-            await NetworkHelperSequential.WriteCommandHeader(networkStream, Commands.FinishSessionCmd, cmdDataBytes.Length);
-            await NetworkHelperSequential.WriteBytes(networkStream, cmdDataBytes);
+            await NetworkHelper.WriteCommandHeader(_networkStream, Commands.FinishSessionCmd, cmdDataBytes.Length);
+            await NetworkHelper.WriteBytes(_networkStream, cmdDataBytes);
 
-            var cmdHeader = await NetworkHelperSequential.ReadCommandHeader(networkStream);
+            var cmdHeader = await NetworkHelper.ReadCommandHeader(_networkStream);
             if (cmdHeader.Command != Commands.FinishSessionCmd)
                 return new ServerResponseWithData<SyncInfo> { ErrorMsg = "Wrong command received" };
 
             if (cmdHeader.PayloadLength == 0)
                 return new ServerResponseWithData<SyncInfo> { ErrorMsg = "No data received" };
 
-            var responseBytes = await NetworkHelperSequential.ReadBytes(networkStream, cmdHeader.PayloadLength);
+            var responseBytes = await NetworkHelper.ReadBytes(_networkStream, cmdHeader.PayloadLength);
             var response = Serializer.Deserialize<ServerResponse>(responseBytes);
 
             return response;
         }
 
-        private async Task<bool> SendFiles(NetworkStream networkStream, List<SyncFileInfo> dataToUpload, SyncDatabase syncDb)
+        private async Task<bool> SendFiles(List<SyncFileInfo> dataToUpload, SyncDatabase syncDb)
         {
             Log?.Invoke($"Going to upload {dataToUpload.Count} files");
             var done = 1;
@@ -223,62 +198,47 @@ namespace FileSync.Common
                 var fileLength = new FileInfo(filePath).Length;
 
                 if (!string.IsNullOrEmpty(fileInfo.NewRelativePath))
-                {
                     _sessionFileHelper.AddRename(fileInfo.RelativePath, fileInfo.NewRelativePath);
-                }
 
-                var data = new SendFileCommandData
+                var request = new SendFileRequest
                 {
                     FileLength = fileLength,
                     SessionId = _sessionId,
                     RelativeFilePath = fileInfo.NewRelativePath ?? fileInfo.RelativePath,
                     HashStr = syncDb.Files.First(x => x.RelativePath == fileInfo.RelativePath).HashStr,
                 };
-                var dataBytes = Serializer.Serialize(data);
-                await NetworkHelperSequential.WriteCommandHeader(networkStream, Commands.SendFileCmd, dataBytes.Length);
-                await NetworkHelperSequential.WriteBytes(networkStream, dataBytes);
-                await NetworkHelperSequential.WriteFromFileAndHashAsync(networkStream, filePath, (int) fileLength);
+
+                var response = await request.Send(_networkStream);
+                if (!response.HasError)
+                    await NetworkHelper.WriteFromFileAndHashAsync(_networkStream, filePath, (int) fileLength);
             }
 
             return true;
         }
 
-        private async Task<bool> ReceiveFiles(Stream networkStream, IEnumerable<SyncFileInfo> dataToDownload, SyncDatabase syncDb)
+        private async Task<bool> ReceiveFiles(IEnumerable<SyncFileInfo> dataToDownload, SyncDatabase syncDb)
         {
             foreach (var fileInfo in dataToDownload)
             {
-                var data = new GetFileCommandData
+                var getFileRequest = new GetFileRequest
                 {
                     SessionId = _sessionId,
                     RelativeFilePath = fileInfo.RelativePath,
                 };
-                var dataBytes = Serializer.Serialize(data);
 
-                await NetworkHelperSequential.WriteCommandHeader(networkStream, Commands.GetFileCmd, dataBytes.Length);
-                await NetworkHelperSequential.WriteBytes(networkStream, dataBytes);
-
-                var cmdHeader = await NetworkHelperSequential.ReadCommandHeader(networkStream);
-                if (cmdHeader.Command != Commands.GetFileCmd)
-                {
+                var resp = await getFileRequest.Send(_networkStream);
+                if (resp.HasError)
                     return false;
-                }
 
-                if (cmdHeader.PayloadLength == 0)
-                {
-                    return false;
-                }
-
-                var fileLengthBytes = await NetworkHelperSequential.ReadBytes(networkStream, cmdHeader.PayloadLength);
-                var fileLength = BitConverter.ToInt64(fileLengthBytes, 0);
+                var fileLength = resp.Data;
 
                 var downloadedFileRelativePath = fileInfo.NewRelativePath ?? fileInfo.RelativePath;
                 var tmpFilePath = Path.Combine(_newDir, downloadedFileRelativePath);
-                var newHash = await NetworkHelperSequential.ReadToFileAndHashAsync(networkStream, tmpFilePath, (int)fileLength);
+                var newHash = await NetworkHelper.ReadToFileAndHashAsync(_networkStream, tmpFilePath, (int) fileLength); // TODO remove int cast
+                var newHashStr = newHash.ToHashString();
 
-                if (!string.Equals(newHash.ToHashString(), fileInfo.HashStr, StringComparison.OrdinalIgnoreCase))
-                {
+                if (!string.Equals(newHashStr, fileInfo.HashStr, StringComparison.OrdinalIgnoreCase))
                     throw new InvalidOperationException("File copy error: hash mismatch");
-                }
 
                 _sessionFileHelper.AddNew(downloadedFileRelativePath);
 
@@ -298,35 +258,22 @@ namespace FileSync.Common
                     fi.NewRelativePath = null;
                 }
 
-                fi.HashStr = newHash.ToHashString();
+                fi.HashStr = newHashStr;
                 fi.State = SyncFileState.NotChanged;
             }
 
             return true;
         }
 
-        private async Task<ServerResponseWithData<SyncInfo>> GetSyncList(Stream networkStream, Guid sessionId, List<SyncFileInfo> syncDbFiles)
+        private async Task<ServerResponseWithData<SyncInfo>> GetSyncList(Guid sessionId, List<SyncFileInfo> syncDbFiles)
         {
-            var cmdData = new GetSyncListCommandData
+            var request = new GetSyncListRequest
             {
                 SessionId = sessionId,
                 Files = syncDbFiles,
             };
 
-            var cmdDataBytes = Serializer.Serialize(cmdData);
-
-            await NetworkHelperSequential.WriteCommandHeader(networkStream, Commands.GetSyncListCmd, cmdDataBytes.Length);
-            await NetworkHelperSequential.WriteBytes(networkStream, cmdDataBytes);
-
-            var cmdHeader = await NetworkHelperSequential.ReadCommandHeader(networkStream);
-            if (cmdHeader.Command != Commands.GetSyncListCmd)
-                return new ServerResponseWithData<SyncInfo> { ErrorMsg = "Wrong command received" };
-
-            if (cmdHeader.PayloadLength == 0)
-                return new ServerResponseWithData<SyncInfo> { ErrorMsg = "No data received" };
-
-            var responseBytes = await NetworkHelperSequential.ReadBytes(networkStream, cmdHeader.PayloadLength);
-            var response = Serializer.Deserialize<ServerResponseWithData<SyncInfo>>(responseBytes);
+            var response = await request.Send(_networkStream);
 
             return response;
         }
@@ -368,7 +315,7 @@ namespace FileSync.Common
                     var localFile = localFiles[localFileIdx];
                     localFiles.RemoveAt(localFileIdx);
                     {
-                        var hash = NetworkHelperSequential.HashFileAsync(new FileInfo(localFile)).Result;
+                        var hash = NetworkHelper.HashFileAsync(new FileInfo(localFile)).Result;
 
                         var hashString = hash.ToHashString();
                         if (hashString != stored.HashStr)
@@ -391,7 +338,7 @@ namespace FileSync.Common
 
 
                 {
-                    var hash = NetworkHelperSequential.HashFileAsync(new FileInfo(localFile)).Result;
+                    var hash = NetworkHelper.HashFileAsync(new FileInfo(localFile)).Result;
 
                     return new SyncFileInfo
                     {

@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.IO;
 using System.Runtime.Serialization.Formatters.Binary;
+using System.Threading.Tasks;
 
 namespace FileSync.Common
 {
@@ -38,75 +39,74 @@ namespace FileSync.Common
             Command = commandId;
         }
 
-        protected CommandHeader()
-        {
-        }
-
-        public virtual byte Command { get; }
+        public byte Command { get; }
 
         public int PayloadLength { get; set; }
     }
 
-    [Serializable]
-    public class GetSessionRequest
+    public interface IRequest
     {
-        public readonly byte Command = Commands.GetSessionCmd;
+        byte Command { get; }
+    }
 
-        public Guid ClientId { get; set; }
-
-        public Guid FolderId { get; set; }
+    public interface IRequestWithResponse<T> : IRequest
+    {
     }
 
     [Serializable]
-    public abstract class CommandHeaderWithData<T>
+    public abstract class Request : IRequest
     {
-        private T _data;
-
-        protected CommandHeaderWithData()
+        public async Task<ServerResponse> Send(Stream stream)
         {
+            return await NetworkHelper.SendReceive(stream, this);
         }
 
         public abstract byte Command { get; }
-
-        public int PayloadLength => Bytes.Length;
-
-        public void SetData(T data)
-        {
-            Bytes = Serializer.Serialize(data);
-
-        }
-
-        public byte[] Bytes { get; set; }
-    }
-
-    public class GetClientEndpointsRequest : CommandHeaderWithData<Guid>
-    {
-        public GetClientEndpointsRequest(Guid clientId)
-        {
-            SetData(clientId);
-        }
-
-        public override byte Command => Commands.GetClientEndpointsCmd;
     }
 
     [Serializable]
-    public class GetSyncListCommandData
+    public abstract class RequestWithResponse<T> : IRequestWithResponse<T>
+    {
+        public async Task<ServerResponseWithData<T>> Send(Stream stream)
+        {
+            return await NetworkHelper.SendReceive(stream, this);
+        }
+
+        public abstract byte Command { get; }
+    }
+
+    [Serializable]
+    public class GetSessionRequest : RequestWithResponse<Guid>
+    {
+        public override byte Command => Commands.GetSessionCmd;
+
+        public Guid ClientId { get; set; }
+
+        public Guid EndpointId { get; set; }
+    }
+
+    [Serializable]
+    public class GetSyncListRequest : RequestWithResponse<SyncInfo>
     {
         public Guid SessionId { get; set; }
 
         public List<SyncFileInfo> Files { get; set; }
+
+        public override byte Command => Commands.GetSyncListCmd;
     }
 
     [Serializable]
-    public class GetFileCommandData
+    public class GetFileRequest : RequestWithResponse<long>
     {
         public Guid SessionId { get; set; }
 
         public string RelativeFilePath { get; set; }
+
+        public override byte Command => Commands.GetFileCmd;
     }
 
     [Serializable]
-    public class SendFileCommandData
+    public class SendFileRequest : Request
     {
         public Guid SessionId { get; set; }
 
@@ -115,6 +115,8 @@ namespace FileSync.Common
         public string HashStr { get; set; }
 
         public long FileLength { get; set; }
+
+        public override byte Command => Commands.SendFileCmd;
     }
 
     public static class Serializer

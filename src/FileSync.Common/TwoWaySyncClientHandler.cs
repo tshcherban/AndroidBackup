@@ -55,7 +55,7 @@ namespace FileSync.Common
         {
             try
             {
-                var cmdHeader = await NetworkHelperSequential.ReadCommandHeader(_networkStream);
+                var cmdHeader = await NetworkHelper.ReadCommandHeader(_networkStream);
 
                 if (!ByteToCmd.TryGetValue(cmdHeader.Command, out var cmdName))
                     cmdName = "Unknown command";
@@ -120,7 +120,7 @@ namespace FileSync.Common
 
         private async Task ProcessGetClientEndpointsCmd(CommandHeader cmdHeader)
         {
-            var clientIdBytes = await NetworkHelperSequential.ReadBytes(_networkStream, cmdHeader.PayloadLength);
+            var clientIdBytes = await NetworkHelper.ReadBytes(_networkStream, cmdHeader.PayloadLength);
             var clientId = new Guid(clientIdBytes);
 
             var ret = new ServerResponseWithData<List<ClientFolderEndpoint>>();
@@ -141,7 +141,7 @@ namespace FileSync.Common
 
         private async Task ProcessRegisterClientCmd(CommandHeader cmdHeader)
         {
-            var clientIdBytes = await NetworkHelperSequential.ReadBytes(_networkStream, cmdHeader.PayloadLength);
+            var clientIdBytes = await NetworkHelper.ReadBytes(_networkStream, cmdHeader.PayloadLength);
             var clientId = new Guid(clientIdBytes);
 
             var ret = new ServerResponseWithData<bool>();
@@ -185,9 +185,9 @@ namespace FileSync.Common
             var response = new ServerResponseWithData<Guid>();
             try
             {
-                var req = await NetworkHelperSequential.Read<GetSessionRequest>(_networkStream, header.PayloadLength);
+                var req = await NetworkHelper.Read<GetSessionRequest>(_networkStream, header.PayloadLength);
                 var client = _config.Clients.Single(x => x.Id == req.ClientId);
-                var folder = client.FolderEndpoints.Single(x => x.Id == req.FolderId);
+                var folder = client.FolderEndpoints.Single(x => x.Id == req.EndpointId);
                 var session = SessionStorage.Instance.GetNewSession();
                 session.BaseDir = folder.LocalPath;
                 session.SyncDbDir = Path.Combine(folder.LocalPath, ".sync");
@@ -219,7 +219,7 @@ namespace FileSync.Common
 
         private async Task ProcessFinishSessionCmd(CommandHeader cmdHeader)
         {
-            var sessionId = await NetworkHelperSequential.Read<Guid>(_networkStream, cmdHeader.PayloadLength);
+            var sessionId = await NetworkHelper.Read<Guid>(_networkStream, cmdHeader.PayloadLength);
 
             var response = new ServerResponseWithData<SyncInfo>();
 
@@ -240,7 +240,7 @@ namespace FileSync.Common
                 {
                     FinishFileOperationsSession(session);
 
-                    foreach (var f in session.SyncDb.Files.Where(x =>!string.IsNullOrEmpty(x.NewRelativePath)))
+                    foreach (var f in session.SyncDb.Files.Where(x => !string.IsNullOrEmpty(x.NewRelativePath)))
                     {
                         f.RelativePath = f.NewRelativePath;
                         f.NewRelativePath = null;
@@ -330,11 +330,11 @@ namespace FileSync.Common
 
         private async Task ProcessSendFileCmd(CommandHeader cmdHeader)
         {
-            var data = await NetworkHelperSequential.Read<SendFileCommandData>(_networkStream, cmdHeader.PayloadLength);
+            var request = await NetworkHelper.Read<SendFileRequest>(_networkStream, cmdHeader.PayloadLength);
 
             var ret = new ServerResponse();
 
-            var session = SessionStorage.Instance.GetSession(data.SessionId);
+            var session = SessionStorage.Instance.GetSession(request.SessionId);
             if (session == null)
             {
                 ret.ErrorMsg = "Session does not exist";
@@ -344,38 +344,47 @@ namespace FileSync.Common
                 ret.ErrorMsg = "Session has expired";
                 Msg?.Invoke("Session has expired");
             }
-            else
+
+            await CommandHelper.WriteCommandResponse(_networkStream, request.Command, ret);
+
+            if (!ret.HasError && session != null)
             {
-                data.RelativeFilePath = PathHelpers.NormalizeRelative(data.RelativeFilePath);
-                
-                var filePath = Path.Combine(session.NewDir, data.RelativeFilePath);
+                request.RelativeFilePath = PathHelpers.NormalizeRelative(request.RelativeFilePath);
+
+                var filePath = Path.Combine(session.NewDir, request.RelativeFilePath);
 
                 var fileDir = Path.GetDirectoryName(filePath);
                 PathHelpers.EnsureDirExists(fileDir);
 
-                Msg?.Invoke($"Receiving file '{data.RelativeFilePath}'");
+                Msg?.Invoke($"Receiving file '{request.RelativeFilePath}'");
 
-                var newHash = await NetworkHelperSequential.ReadToFileAndHashAsync(_networkStream, filePath, data.FileLength);
+                var newHash = await NetworkHelper.ReadToFileAndHashAsync(_networkStream, filePath, request.FileLength);
+                var hashString = newHash.ToHashString();
 
-                var fileInfo = session.SyncDb.Files.FirstOrDefault(i => i.RelativePath == data.RelativeFilePath);
+                if (hashString != request.HashStr)
+                    Msg?.Invoke("Receive failed, hash mismatch");
+
+                var fileInfo = session.SyncDb.Files.FirstOrDefault(i => i.RelativePath == request.RelativeFilePath);
+                
                 if (fileInfo != null)
                 {
-                    fileInfo.HashStr = newHash.ToHashString();
+                    fileInfo.HashStr = hashString;
                     fileInfo.State = SyncFileState.NotChanged;
                 }
                 else
                 {
-                    session.SyncDb.AddFile(session.BaseDir, data.RelativeFilePath, newHash.ToHashString());
+                    session.SyncDb.AddFile(session.BaseDir, request.RelativeFilePath, hashString);
                 }
+
                 session.LastAccessTime = DateTime.Now;
             }
         }
 
         private async Task ProcessGetFileCmd(CommandHeader cmdHeader)
         {
-            var data = await NetworkHelperSequential.Read<GetFileCommandData>(_networkStream, cmdHeader.PayloadLength);
+            var data = await NetworkHelper.Read<GetFileRequest>(_networkStream, cmdHeader.PayloadLength);
 
-            var ret = new ServerResponse();
+            var ret = new ServerResponseWithData<long>();
 
             var session = SessionStorage.Instance.GetSession(data.SessionId);
             if (session == null)
@@ -396,17 +405,18 @@ namespace FileSync.Common
 
                 var filePath = Path.Combine(session.BaseDir, data.RelativeFilePath);
                 var fileLength = new FileInfo(filePath).Length;
-                var fileLengthBytes = BitConverter.GetBytes(fileLength);
-                await NetworkHelperSequential.WriteCommandHeader(_networkStream, Commands.GetFileCmd, sizeof(long));
-                await NetworkHelperSequential.WriteBytes(_networkStream, fileLengthBytes);
-                await NetworkHelperSequential.WriteFromFileAndHashAsync(_networkStream, filePath, (int)fileLength);
+                ret.Data = fileLength;
+
+                await CommandHelper.WriteCommandResponse(_networkStream, data.Command, ret);
+                await NetworkHelper.WriteFromFileAndHashAsync(_networkStream, filePath, (int) fileLength);
+
                 session.LastAccessTime = DateTime.Now;
             }
         }
 
         private async Task ProcessGetSyncListCmd(CommandHeader cmdHeader)
         {
-            var remoteData = await NetworkHelperSequential.Read<GetSyncListCommandData>(_networkStream, cmdHeader.PayloadLength);
+            var remoteData = await NetworkHelper.Read<GetSyncListRequest>(_networkStream, cmdHeader.PayloadLength);
 
             var ret = new ServerResponseWithData<SyncInfo>();
 
@@ -418,7 +428,7 @@ namespace FileSync.Common
             else if (session.Expired)
             {
                 ret.ErrorMsg = "Session has expired";
-                //Log?.Invoke("Session has expired");
+                _log.AppendLine("Session has expired");
                 //return ret;
             }
             else
@@ -490,13 +500,14 @@ namespace FileSync.Common
                                         session.FilesForRename.Add((localFileInfo.RelativePath, newPath));
                                         syncInfo.ToDownload.Add(localFileInfo);
                                     }
+
                                     break;
                                 case SyncFileState.Modified:
                                     if (localFileInfo.State == SyncFileState.NotChanged)
                                     {
                                         syncInfo.ToUpload.Add(localFileInfo);
                                     }
-                                    else if (localFileInfo.State == SyncFileState.Modified || 
+                                    else if (localFileInfo.State == SyncFileState.Modified ||
                                              localFileInfo.State == SyncFileState.New)
                                     {
                                         var fileExt = Path.GetExtension(remoteFileInfo.RelativePath);
@@ -517,6 +528,7 @@ namespace FileSync.Common
                                         remoteFileInfo.NewRelativePath = newPath;
                                         syncInfo.ToUpload.Add(remoteFileInfo);
                                     }
+
                                     break;
                                 case SyncFileState.NotChanged:
                                     if (localFileInfo.State == SyncFileState.Modified)
@@ -529,7 +541,13 @@ namespace FileSync.Common
                                     }
                                     else if (localFileInfo.State == SyncFileState.New)
                                     {
-                                        Debugger.Break(); // not possible
+                                        if (localFileInfo.HashStr == remoteFileInfo.HashStr)
+                                        {
+                                            Msg?.Invoke("Skip identical file, client already has one");
+                                            localFileInfo.State = SyncFileState.NotChanged;
+                                        }
+                                        else
+                                            Debugger.Break(); // not possible
                                     }
 
                                     break;
@@ -611,7 +629,7 @@ namespace FileSync.Common
                     localFiles.RemoveAt(localFileIdx);
 
                     {
-                        var hash = NetworkHelperSequential.HashFileAsync(new FileInfo(localFile)).Result;
+                        var hash = NetworkHelper.HashFileAsync(new FileInfo(localFile)).Result;
 
                         var localFileHash = hash.ToHashString();
                         if (localFileHash != stored.HashStr)
@@ -631,7 +649,7 @@ namespace FileSync.Common
                 var localFileRelativePath = localFile.Replace(baseDir, string.Empty);
 
                 {
-                    var hash = NetworkHelperSequential.HashFileAsync(new FileInfo(localFile)).Result;
+                    var hash = NetworkHelper.HashFileAsync(new FileInfo(localFile)).Result;
 
                     return new SyncFileInfo
                     {

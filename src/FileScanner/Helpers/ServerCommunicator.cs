@@ -15,9 +15,9 @@ namespace FileSync.Android
 
         private async Task<ServerResponseWithData<Guid>> GetId(Stream networkStream)
         {
-            await NetworkHelperSequential.WriteCommandHeader(networkStream, Commands.GetIdCmd);
+            await NetworkHelper.WriteCommandHeader(networkStream, Commands.GetIdCmd);
 
-            var cmdHeader = await NetworkHelperSequential.ReadCommandHeader(networkStream);
+            var cmdHeader = await NetworkHelper.ReadCommandHeader(networkStream);
             if (cmdHeader.Command != Commands.GetIdCmd)
             {
                 return new ServerResponseWithData<Guid> { ErrorMsg = "Wrong command received" };
@@ -28,7 +28,7 @@ namespace FileSync.Android
                 return new ServerResponseWithData<Guid> { ErrorMsg = "No data received" };
             }
 
-            var responseBytes = await NetworkHelperSequential.ReadBytes(networkStream, cmdHeader.PayloadLength);
+            var responseBytes = await NetworkHelper.ReadBytes(networkStream, cmdHeader.PayloadLength);
             var response = Serializer.Deserialize<ServerResponseWithData<Guid>>(responseBytes);
 
             return response;
@@ -38,17 +38,17 @@ namespace FileSync.Android
         {
             var cmdDataBytes = id.ToByteArray();
 
-            await NetworkHelperSequential.WriteCommandHeader(networkStream, Commands.RegisterClientCmd, cmdDataBytes.Length);
-            await NetworkHelperSequential.WriteBytes(networkStream, cmdDataBytes);
+            await NetworkHelper.WriteCommandHeader(networkStream, Commands.RegisterClientCmd, cmdDataBytes.Length);
+            await NetworkHelper.WriteBytes(networkStream, cmdDataBytes);
 
-            var cmdHeader = await NetworkHelperSequential.ReadCommandHeader(networkStream);
+            var cmdHeader = await NetworkHelper.ReadCommandHeader(networkStream);
             if (cmdHeader.Command != Commands.RegisterClientCmd)
                 return new ServerResponseWithData<bool> { ErrorMsg = "Wrong command received" };
 
             if (cmdHeader.PayloadLength == 0)
                 return new ServerResponseWithData<bool> { ErrorMsg = "No data received" };
 
-            var responseBytes = await NetworkHelperSequential.ReadBytes(networkStream, cmdHeader.PayloadLength);
+            var responseBytes = await NetworkHelper.ReadBytes(networkStream, cmdHeader.PayloadLength);
             var response = Serializer.Deserialize<ServerResponseWithData<bool>>(responseBytes);
 
             return response;
@@ -58,17 +58,17 @@ namespace FileSync.Android
         {
             var cmdDataBytes = id.ToByteArray();
 
-            await NetworkHelperSequential.WriteCommandHeader(networkStream, Commands.GetClientEndpointsCmd, cmdDataBytes.Length);
-            await NetworkHelperSequential.WriteBytes(networkStream, cmdDataBytes);
+            await NetworkHelper.WriteCommandHeader(networkStream, Commands.GetClientEndpointsCmd, cmdDataBytes.Length);
+            await NetworkHelper.WriteBytes(networkStream, cmdDataBytes);
 
-            var cmdHeader = await NetworkHelperSequential.ReadCommandHeader(networkStream);
+            var cmdHeader = await NetworkHelper.ReadCommandHeader(networkStream);
             if (cmdHeader.Command != Commands.GetClientEndpointsCmd)
                 return new ServerResponseWithData<List<ClientFolderEndpoint>> { ErrorMsg = "Wrong command received" };
 
             if (cmdHeader.PayloadLength == 0)
                 return new ServerResponseWithData<List<ClientFolderEndpoint>> { ErrorMsg = "No data received" };
 
-            var responseBytes = await NetworkHelperSequential.ReadBytes(networkStream, cmdHeader.PayloadLength);
+            var responseBytes = await NetworkHelper.ReadBytes(networkStream, cmdHeader.PayloadLength);
             var response = Serializer.Deserialize<ServerResponseWithData<List<ClientFolderEndpoint>>>(responseBytes);
 
             return response;
@@ -104,7 +104,7 @@ namespace FileSync.Android
                             return null;
                         }
 
-                        await NetworkHelperSequential.WriteCommandHeader(networkStream, Commands.DisconnectCmd);
+                        await NetworkHelper.WriteCommandHeader(networkStream, Commands.DisconnectCmd);
 
                         return sessionId.Data;
                     }
@@ -140,7 +140,7 @@ namespace FileSync.Android
                             return false;
                         }
 
-                        await NetworkHelperSequential.WriteCommandHeader(networkStream, Commands.DisconnectCmd);
+                        await NetworkHelper.WriteCommandHeader(networkStream, Commands.DisconnectCmd);
 
                         return sessionId.Data;
                     }
@@ -176,7 +176,7 @@ namespace FileSync.Android
                             return null;
                         }
 
-                        await NetworkHelperSequential.WriteCommandHeader(networkStream, Commands.DisconnectCmd);
+                        await NetworkHelper.WriteCommandHeader(networkStream, Commands.DisconnectCmd);
 
                         return sessionId.Data;
                     }
