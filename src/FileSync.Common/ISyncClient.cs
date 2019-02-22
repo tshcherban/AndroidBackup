@@ -28,5 +28,7 @@ namespace FileSync.Common
         event Action<string> Log;
 
         Task Sync();
+
+        Task SyncTask { get; }
     }
 }

@@ -27,9 +27,20 @@ namespace FileSync.Common
         private Guid _sessionId;
         private NetworkStream _networkStream;
 
-        public event Action<string> Log;
+        private Action<string> _logEvent;
 
-        public event Action End;
+        public event Action<string> Log
+        {
+            add
+            {
+                if (_logEvent == null || !_logEvent.GetInvocationList().Contains(value))
+                    _logEvent += value;
+            }
+            // ReSharper disable once DelegateSubtraction
+            remove => _logEvent -= value;
+        }
+
+        public Task SyncTask { get; private set; } = Task.CompletedTask;
 
         public TwoWaySyncClientImpl(IPEndPoint endpoint, string baseDir, string syncDbDir, Guid clientId, Guid folderId)
         {
@@ -52,23 +63,22 @@ namespace FileSync.Common
                     var success = await client.ConnectAsync(_endpoint.Address, _endpoint.Port).WhenOrTimeout(OperationsTimeout);
                     if (!success)
                     {
-                        Log?.Invoke("Connecting to server timed out");
+                        OnLog("Connecting to server timed out");
                         return;
                     }
 
                     _networkStream = client.GetStream();
                     using (_networkStream)
                     {
-                        await DoSync();
+                        SyncTask = DoSync();
+                        await SyncTask;
                     }
                 }
             }
             catch (Exception e)
             {
-                Log?.Invoke($"Error during sync {e}");
+                OnLog($"Error during sync {e}");
             }
-
-            End?.Invoke();
         }
 
         private async Task DoSync()
@@ -82,7 +92,7 @@ namespace FileSync.Common
             var sessionId = await request.Send(_networkStream);
             if (sessionId.HasError)
             {
-                Log?.Invoke($"Unable to create sync session. Server response was '{sessionId.ErrorMsg}'");
+                OnLog($"Unable to create sync session. Server response was '{sessionId.ErrorMsg}'");
                 return;
             }
 
@@ -94,21 +104,21 @@ namespace FileSync.Common
                 dirInfo.Attributes = dirInfo.Attributes | FileAttributes.Hidden;
             }
 
-            Log?.Invoke("Scanning directory");
+            OnLog("Scanning directory");
 
             var syncDb = GetLocalSyncDb(out var error);
             if (syncDb == null)
             {
-                Log?.Invoke(error);
+                OnLog(error);
                 return;
             }
 
-            Log?.Invoke("Waiting server sync list");
+            OnLog("Waiting server sync list");
 
             var syncList = await GetSyncList(_sessionId, syncDb.Files);
             if (syncList.HasError)
             {
-                Log?.Invoke($"Unable to get sync list. Server response was '{syncList.ErrorMsg}'");
+                OnLog($"Unable to get sync list. Server response was '{syncList.ErrorMsg}'");
                 return;
             }
 
@@ -125,17 +135,17 @@ namespace FileSync.Common
             if (!await SendFiles(syncList.Data.ToUpload, syncDb))
                 return;
 
-            Log?.Invoke("Finishing server session");
+            OnLog("Finishing server session");
 
             var response = await FinishServerSession(_sessionId);
             if (response.HasError)
             {
-                Log?.Invoke($"Error finishing session. Server response was '{response.ErrorMsg}'");
+                OnLog($"Error finishing session. Server response was '{response.ErrorMsg}'");
 
                 return;
             }
 
-            Log?.Invoke("Committing local changes");
+            OnLog("Committing local changes");
             _sessionFileHelper.FinishSession();
 
             syncDb.Files.RemoveAll(x => x.State == SyncFileState.Deleted);
@@ -176,17 +186,17 @@ namespace FileSync.Common
 
             await NetworkHelper.WriteCommandHeader(_networkStream, Commands.DisconnectCmd);
 
-            Log?.Invoke("Done");
+            OnLog("Done");
         }
 
         private void PrepareRemoveFiles(ServerResponseWithData<SyncInfo> syncList, SyncDatabase syncDb)
         {
             if (syncList.Data.ToRemove.Count > 0)
-                Log?.Invoke($"Marking for remove {syncList.Data.ToRemove.Count} files");
+                OnLog($"Marking for remove {syncList.Data.ToRemove.Count} files");
 
             foreach (var fileInfo in syncList.Data.ToRemove)
             {
-                Log?.Invoke($"Remove {fileInfo.RelativePath}");
+                OnLog($"Remove {fileInfo.RelativePath}");
 
                 _sessionFileHelper.PrepareForRemove(fileInfo.RelativePath);
 
@@ -218,12 +228,12 @@ namespace FileSync.Common
         private async Task<bool> SendFiles(IReadOnlyCollection<SyncFileInfo> dataToUpload, SyncDatabase syncDb)
         {
             if (dataToUpload.Count > 0)
-                Log?.Invoke($"About to upload {dataToUpload.Count} files");
+                OnLog($"About to upload {dataToUpload.Count} files");
 
             var done = 1;
             foreach (var fileInfo in dataToUpload)
             {
-                Log?.Invoke($"Uploading {done++}");
+                OnLog($"Uploading {done++}");
 
                 var filePath = Path.Combine(_baseDir, fileInfo.RelativePath);
                 var fileLength = new FileInfo(filePath).Length;
@@ -250,11 +260,11 @@ namespace FileSync.Common
         private async Task<bool> ReceiveFiles(IReadOnlyCollection<SyncFileInfo> dataToDownload, SyncDatabase syncDb)
         {
             if (dataToDownload.Count > 0)
-                Log?.Invoke($"About to receive {dataToDownload.Count} files from server");
+                OnLog($"About to receive {dataToDownload.Count} files from server");
 
             foreach (var fileInfo in dataToDownload)
             {
-                Log?.Invoke($"Receiving {fileInfo.RelativePath}");
+                OnLog($"Receiving {fileInfo.RelativePath}");
 
                 var getFileRequest = new GetFileRequest
                 {
@@ -366,25 +376,25 @@ namespace FileSync.Common
             var localInfos = localFiles.Select(localFile =>
             {
                 if (dbDirInBase && localFile.StartsWith(_syncDbDir))
-                {
                     return null;
-                }
 
                 var localFileRelativePath = localFile.Replace(_baseDir, string.Empty);
 
+                var hash = NetworkHelper.HashFileAsync(new FileInfo(localFile)).Result;
 
+                return new SyncFileInfo
                 {
-                    var hash = NetworkHelper.HashFileAsync(new FileInfo(localFile)).Result;
-
-                    return new SyncFileInfo
-                    {
-                        HashStr = hash.ToHashString(),
-                        RelativePath = localFileRelativePath.TrimStart(Path.DirectorySeparatorChar),
-                        State = SyncFileState.New,
-                    };
-                }
+                    HashStr = hash.ToHashString(),
+                    RelativePath = localFileRelativePath.TrimStart(Path.DirectorySeparatorChar),
+                    State = SyncFileState.New,
+                };
             }).Where(i => i != null).ToList();
             syncDb.Files.AddRange(localInfos);
+        }
+
+        private void OnLog(string msg)
+        {
+            _logEvent?.Invoke(msg);
         }
     }
 }

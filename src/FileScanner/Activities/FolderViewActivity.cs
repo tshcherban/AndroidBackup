@@ -49,7 +49,17 @@ namespace FileSync.Android.Activities
 
             if (FileSyncApp.Instance.ActiveClients.TryGetValue(_folderId, out var client))
             {
+                _syncBtn.Enabled = false;
+
                 _client = client;
+                _client.Log += AppendLog;
+                _client.SyncTask.ContinueWith(x =>
+                {
+                    RunOnUiThread(() => { _syncBtn.Enabled = true; });
+                    FileSyncApp.Instance.ActiveClients.Remove(_folderId);
+                    _client.Log -= AppendLog;
+                    _client = null;
+                });
             }
         }
 
@@ -66,6 +76,9 @@ namespace FileSync.Android.Activities
 
             try
             {
+                if (FileSyncApp.Instance.ActiveClients.ContainsKey(_folderId))
+                    throw new Exception("WTF, sync in progress");
+
                 _client = SyncClientFactory.GetTwoWay(Common.Extensions.ParseEndpoint(_serverUrl), _folderItem.LocalPath, null, FileSyncApp.Instance.Config.ClientId, _folderItem.Id);
 
                 FileSyncApp.Instance.ActiveClients[_folderId] = _client; // TODO
@@ -73,6 +86,11 @@ namespace FileSync.Android.Activities
                 _client.Log += AppendLog;
 
                 await Task.Run(_client.Sync);
+
+                FileSyncApp.Instance.ActiveClients.Remove(_folderId);
+
+                _client.Log -= AppendLog;
+                _client = null;
             }
             finally
             {
