@@ -35,7 +35,7 @@ namespace FileSync.Tests
             }
         }
 
-        [TestMethod]
+        /*[TestMethod]
         public void ServerConfig_Test()
         {
             var store = new SyncServiceConfigStore(@"D:\Taras\stest\main.json");
@@ -74,58 +74,33 @@ namespace FileSync.Tests
             });
 
             store.Save(conf);
-        }
-
-        [TestMethod]
-        public void TwoWaySync_Test()
-        {
-            var server = new SyncServer(9211, Guid.NewGuid(), "config.json");
-
-            server.Msg += Console.WriteLine;
-
-            server.Start();
-
-            var client = SyncClientFactory.GetTwoWay(new IPEndPoint(IPAddress.Parse("127.0.0.1"), 9211), @"D:\Taras\stestsrc", null, Guid.Empty, Guid.Empty);
-            client.Sync().Wait();
-
-            server.Stop();
-        }
-
-        [TestMethod]
-        public void PathHelpers_Test2()
-        {
-            return;
-            var hashes = new HashSet<ulong>();
-            var collisions = new List<Tuple<ulong, int, byte>>();
-
-            var data = new byte[1048576];
-            for (var lengthIdx = 0; lengthIdx < data.Length; ++lengthIdx)
-            {
-                if (lengthIdx % 1000 == 0)
-                {
-                    Console.WriteLine($"{lengthIdx / 1000} k");
-                }
-
-                for (byte byteIdx = 1; byteIdx < byte.MaxValue; ++byteIdx)
-                {
-                    data[lengthIdx] = byteIdx;
-                    using (var str = new MemoryStream(data))
-                    {
-                        var h = XxHash64Unsafe.ComputeHash(str);
-                        if (!hashes.Add(h))
-                        {
-                            Console.WriteLine("Collision found");
-                            collisions.Add(Tuple.Create(h, lengthIdx, byteIdx));
-                        }
-                    }
-                }
-            }
-        }
+        }*/
 
         [TestMethod]
         public void GetMultipleSessions_WaitsAppropriateTime_Test()
         {
-            /*using (var client = new TcpClient<IOneWaySyncService>(new IPEndPoint(IPAddress.Parse("127.0.0.1"), 9211)))
+            const int num = 5;
+
+            var expectedTimeMin = (num - 1) * SessionStorage.Instance.CreateSessionTimeoutSeconds;
+            var expectedTimeMax = num * SessionStorage.Instance.CreateSessionTimeoutSeconds;
+
+            var sw = new Stopwatch();
+            sw.Start();
+
+            var ids = Enumerable.Range(1, num).AsParallel().Select(i => SessionStorage.Instance.GetNewSession()).ToList();
+
+            sw.Stop();
+
+            Assert.AreEqual(ids.Count, num, $"Got {ids.Count} sessions, but expected {num}");
+
+            Assert.IsTrue(sw.Elapsed.TotalSeconds <= expectedTimeMax && sw.Elapsed.TotalSeconds >= expectedTimeMin,
+                $"Got {num} sessions in {sw.Elapsed.TotalSeconds:F1} s, but expected in {expectedTimeMin:F1} - {expectedTimeMax:F1} s");
+        }
+
+        /*[TestMethod]
+        public void GetMultipleSessions_WaitsAppropriateTime_Integration_Test()
+        {
+            using (var client = new TcpClient<IOneWaySyncService>(new IPEndPoint(IPAddress.Parse("127.0.0.1"), 9211)))
             {
                 var proxy = client.Proxy;
 
@@ -145,7 +120,7 @@ namespace FileSync.Tests
 
                 Assert.IsTrue(sw.Elapsed.TotalSeconds <= expectedTimeMax && sw.Elapsed.TotalSeconds >= expectedTimeMin,
                     $"Got {num} sessions in {sw.Elapsed.TotalSeconds} s, but expected in {expectedTimeMin} - {expectedTimeMax} s");
-            }*/
-        }
+            }
+        }*/
     }
 }

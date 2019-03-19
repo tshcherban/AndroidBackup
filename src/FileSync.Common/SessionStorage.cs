@@ -7,27 +7,38 @@ namespace FileSync.Common
 {
     public class SessionStorage
     {
-        public const int CreateSessionTimeoutSeconds = 3;
         public const int SessionTimeoutMinutes = 10;
 
         public static readonly SessionStorage Instance = new SessionStorage();
-        
-        private static readonly TimeSpan CreateSessionTimeout = TimeSpan.FromSeconds(CreateSessionTimeoutSeconds);
+
+        private TimeSpan _createSessionTimeout;
+        private DateTime _lastSessionCreated = DateTime.MinValue;
 
         private readonly object _syncRoot = new object();
         private readonly List<Session> _sessions = new List<Session>();
 
-        private DateTime _lastSessionCreated = DateTime.MinValue;
+        public double CreateSessionTimeoutSeconds { get; private set; }
+
+        private SessionStorage()
+        {
+            SetTimeout(3);
+        }
+
+        public void SetTimeout(double seconds)
+        {
+            CreateSessionTimeoutSeconds = seconds;
+            _createSessionTimeout = TimeSpan.FromSeconds(CreateSessionTimeoutSeconds);
+        }
 
         public Session GetNewSession()
         {
             lock (_syncRoot)
             {
                 var dif = DateTime.Now - _lastSessionCreated;
-                if (dif < CreateSessionTimeout)
+                if (dif < _createSessionTimeout)
                 {
-                    var sleepSpan = CreateSessionTimeout - dif;
-                    Console.WriteLine($"New session requests too frequent. Sleeping for {sleepSpan:g} ms");
+                    var sleepSpan = _createSessionTimeout - dif;
+                    Console.WriteLine($"New session requests too frequent. Sleeping for {sleepSpan:g}");
                     Task.Delay(sleepSpan).Wait();
                 }
 
