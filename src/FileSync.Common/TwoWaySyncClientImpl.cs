@@ -22,10 +22,10 @@ namespace FileSync.Common
         private readonly string _toRemoveDir;
         private readonly string _newDir;
         private readonly StringBuilder _log = new StringBuilder();
-        private readonly SessionFileHelper _sessionFileHelper;
 
         private Guid _sessionId;
         private NetworkStream _networkStream;
+        private SessionFileHelper _sessionFileHelper;
 
         private Action<string> _logEvent;
 
@@ -51,13 +51,15 @@ namespace FileSync.Common
             _folderId = folderId;
             _toRemoveDir = Path.Combine(syncDbDir, "ToRemove");
             _newDir = Path.Combine(syncDbDir, "New");
-            _sessionFileHelper = new SessionFileHelper(_newDir, _toRemoveDir, _baseDir, _log);
         }
 
         public async Task Sync()
         {
             try
             {
+                _sessionFileHelper = new SessionFileHelper(_newDir, _toRemoveDir, _baseDir, _log);
+                _log.Clear();
+
                 using (var client = new TcpClient {ReceiveTimeout = OperationsTimeout, SendTimeout = OperationsTimeout})
                 {
                     var success = await client.ConnectAsync(_endpoint.Address, _endpoint.Port).WhenOrTimeout(OperationsTimeout);

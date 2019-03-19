@@ -14,8 +14,8 @@ namespace FileSync.Tests
     {
         private const int ServerPort = 9211;
 
-        private string _src;
-        private string _dst;
+        private string _clientFolder;
+        private string _serverFolder;
         private string _testsRoot;
         private IServerConfig _testServerConfig;
         private SyncServer _server;
@@ -37,10 +37,21 @@ namespace FileSync.Tests
         }
 
         [TestMethod]
-        public async Task TwoWaySync_SingleNewFile_Succeeds_Test()
+        public async Task TwoWaySync_SingleNewFileClient_Succeeds_Test()
         {
-            var sourceFile = Path.Combine(_src, "file1.txt");
-            var expectedFile = Path.Combine(_dst, "file1.txt");
+            await TwoWaySync_SingleNewFile_Succeeds(_clientFolder, _serverFolder);
+        }
+
+        [TestMethod]
+        public async Task TwoWaySync_SingleNewFileServer_Succeeds_Test()
+        {
+            await TwoWaySync_SingleNewFile_Succeeds(_serverFolder, _clientFolder);
+        }
+
+        private async Task TwoWaySync_SingleNewFile_Succeeds(string src, string dst)
+        {
+            var sourceFile = Path.Combine(src, "file1.txt");
+            var expectedFile = Path.Combine(dst, "file1.txt");
 
             File.WriteAllText(sourceFile, "testcontent1");
 
@@ -51,10 +62,21 @@ namespace FileSync.Tests
         }
 
         [TestMethod]
-        public async Task TwoWaySync_EditedFile_Succeeds_Test()
+        public async Task TwoWaySync_EditedFileClient_Succeeds_Test()
         {
-            var sourceFile = Path.Combine(_src, "file1.txt");
-            var expectedFile = Path.Combine(_dst, "file1.txt");
+            await TwoWaySync_EditedFile_Succeeds(_clientFolder, _serverFolder);
+        }
+
+        [TestMethod]
+        public async Task TwoWaySync_EditedFileServer_Succeeds_Test()
+        {
+            await TwoWaySync_EditedFile_Succeeds(_serverFolder, _clientFolder);
+        }
+
+        private async Task TwoWaySync_EditedFile_Succeeds(string src, string dst)
+        {
+            var sourceFile = Path.Combine(src, "file1.txt");
+            var expectedFile = Path.Combine(dst, "file1.txt");
 
             File.WriteAllText(sourceFile, "testcontent1");
 
@@ -72,10 +94,21 @@ namespace FileSync.Tests
         }
 
         [TestMethod]
-        public async Task TwoWaySync_DeletedFile_Succeeds_Test()
+        public async Task TwoWaySync_DeletedFileClient_Succeeds_Test()
         {
-            var sourceFile = Path.Combine(_src, "file1.txt");
-            var expectedFile = Path.Combine(_dst, "file1.txt");
+            await TwoWaySync_DeletedFile_Succeeds(_clientFolder, _serverFolder);
+        }
+        
+        [TestMethod]
+        public async Task TwoWaySync_DeletedFileServer_Succeeds_Test()
+        {
+            await TwoWaySync_DeletedFile_Succeeds(_serverFolder, _clientFolder);
+        }
+
+        private async Task TwoWaySync_DeletedFile_Succeeds(string src, string dst)
+        {
+            var sourceFile = Path.Combine(src, "file1.txt");
+            var expectedFile = Path.Combine(dst, "file1.txt");
 
             File.WriteAllText(sourceFile, "testcontent1");
 
@@ -88,16 +121,27 @@ namespace FileSync.Tests
 
             await _client.Sync();
 
-            Assert.IsTrue(!File.Exists(expectedFile), "File was not deleted");
+            Assert.IsFalse(File.Exists(expectedFile), "File was not deleted");
         }
 
         [TestMethod]
-        public async Task TwoWaySync_RenamedFile_Succeeds_Test()
+        public async Task TwoWaySync_RenamedFileClient_Succeeds_Test()
         {
-            var sourceFile = Path.Combine(_src, "file1.txt");
+            await TwoWaySync_RenamedFile_Succeeds(_clientFolder, _serverFolder);
+        }
+        
+        [TestMethod]
+        public async Task TwoWaySync_RenamedFileServer_Succeeds_Test()
+        {
+            await TwoWaySync_RenamedFile_Succeeds(_serverFolder, _clientFolder);
+        }
+
+        private async Task TwoWaySync_RenamedFile_Succeeds(string src, string dst)
+        {
+            var sourceFile = Path.Combine(src, "file1.txt");
             var movedSourceFile = sourceFile.Replace("file1.txt", "file22.txt");
-            var expectedFile = Path.Combine(_dst, "file1.txt");
-            var movedExpectedFile = Path.Combine(_dst, "file22.txt");
+            var expectedFile = Path.Combine(dst, "file1.txt");
+            var movedExpectedFile = expectedFile.Replace("file1.txt", "file22.txt");
 
             File.WriteAllText(sourceFile, "testcontent1");
 
@@ -110,10 +154,11 @@ namespace FileSync.Tests
 
             await _client.Sync();
 
-            Assert.IsFalse(File.Exists(expectedFile), "File was not deleted");
+            Assert.IsFalse(File.Exists(expectedFile), "Old file was not deleted");
             Assert.IsTrue(File.Exists(movedExpectedFile), "File was not created");
             Assert.IsTrue(FilesEqual(movedSourceFile, movedExpectedFile), "File's content was not synced");
         }
+
 
         private void PrepareServerClient()
         {
@@ -127,7 +172,7 @@ namespace FileSync.Tests
                     {
                         Id = Guid.Empty,
                         DisplayName = "folder1",
-                        LocalPath = _dst,
+                        LocalPath = _serverFolder,
                     }
                 }
             });
@@ -140,7 +185,7 @@ namespace FileSync.Tests
 
             var serverEp = new IPEndPoint(IPAddress.Parse("127.0.0.1"), ServerPort);
 
-            _client = SyncClientFactory.GetTwoWay(serverEp, _src, null, Guid.Empty, Guid.Empty);
+            _client = SyncClientFactory.GetTwoWay(serverEp, _clientFolder, null, Guid.Empty, Guid.Empty);
             _client.Log += ClientWrite;
         }
 
@@ -156,11 +201,11 @@ namespace FileSync.Tests
 
             Directory.CreateDirectory(_testsRoot);
 
-            _src = Path.Combine(_testsRoot, "src");
-            Directory.CreateDirectory(_src);
+            _clientFolder = Path.Combine(_testsRoot, "client");
+            Directory.CreateDirectory(_clientFolder);
 
-            _dst = Path.Combine(_testsRoot, "dst");
-            Directory.CreateDirectory(_dst);
+            _serverFolder = Path.Combine(_testsRoot, "server");
+            Directory.CreateDirectory(_serverFolder);
         }
 
         private static void ServerWrite(string s) => Console.WriteLine($"server: {s}");
