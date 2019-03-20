@@ -159,6 +159,165 @@ namespace FileSync.Tests
             Assert.IsTrue(FilesEqual(movedSourceFile, movedExpectedFile), "File's content was not synced");
         }
 
+        [TestMethod]
+        public async Task TwoWaySync_NewDifferentOnBothClientFirst_Succeeds_Test()
+        {
+            await TwoWaySync_NewOnBoth_Succeeds(_clientFolder, _serverFolder);
+        }
+        
+        [TestMethod]
+        public async Task TwoWaySync_NewDifferentOnBothServerFirst_Succeeds_Test()
+        {
+            await TwoWaySync_NewOnBoth_Succeeds(_serverFolder, _clientFolder);
+        }
+
+        private async Task TwoWaySync_NewOnBoth_Succeeds(string src, string dst)
+        {
+            var sourceFile = Path.Combine(src, "file1.txt");
+            var sourceFileAfterSync1 = sourceFile.Replace("file1.txt", "file1_FromServer.txt");
+            var sourceFileAfterSync2 = sourceFile.Replace("file1.txt", "file1_FromClient.txt");
+            var targetFile = Path.Combine(dst, "file1.txt");
+            var targetFileAfterSync1 = targetFile.Replace("file1.txt", "file1_FromServer.txt");
+            var targetFileAfterSync2 = targetFile.Replace("file1.txt", "file1_FromClient.txt");
+
+            File.WriteAllText(sourceFile, "testcontent1");
+            File.WriteAllText(targetFile, "testcontent2");
+
+            await _client.Sync();
+
+            Assert.IsTrue(File.Exists(sourceFileAfterSync1), "File was not created");
+            Assert.IsTrue(File.Exists(sourceFileAfterSync2), "File was not created");
+            Assert.IsTrue(File.Exists(targetFileAfterSync1), "File was not created");
+            Assert.IsTrue(File.Exists(targetFileAfterSync2), "File was not created");
+
+            Assert.IsFalse(File.Exists(sourceFile), "File was not deleted");
+            Assert.IsFalse(File.Exists(targetFile), "File was not deleted");
+
+            Assert.IsTrue(FilesEqual(sourceFileAfterSync1, targetFileAfterSync1), "File content mismatch");
+            Assert.IsTrue(FilesEqual(sourceFileAfterSync2, targetFileAfterSync2), "File content mismatch");
+        }
+
+        [TestMethod]
+        public async Task TwoWaySync_NewSameOnBothClientFirst_Succeeds_Test()
+        {
+            await TwoWaySync_NewSameOnBoth_Succeeds(_clientFolder, _serverFolder);
+        }
+        
+        [TestMethod]
+        public async Task TwoWaySync_NewSameOnBothServerFirst_Succeeds_Test()
+        {
+            await TwoWaySync_NewSameOnBoth_Succeeds(_serverFolder, _clientFolder);
+        }
+
+        private async Task TwoWaySync_NewSameOnBoth_Succeeds(string src, string dst)
+        {
+            var sourceFile = Path.Combine(src, "file1.txt");
+            var targetFile = Path.Combine(dst, "file1.txt");
+
+            File.WriteAllText(sourceFile, "testcontent1");
+            File.WriteAllText(targetFile, "testcontent1");
+
+            await _client.Sync();
+
+            Assert.IsTrue(File.Exists(sourceFile), "File was not created");
+            Assert.IsTrue(File.Exists(targetFile), "File was not created");
+
+            Assert.IsTrue(FilesEqual(sourceFile, targetFile), "File content mismatch");
+        }
+
+        [TestMethod]
+        public async Task TwoWaySync_NewEmptyOnBothClientFirst_Succeeds_Test()
+        {
+            await TwoWaySync_NewEmptyOnBoth_Succeeds(_clientFolder, _serverFolder);
+        }
+        
+        [TestMethod]
+        public async Task TwoWaySync_NewEmptyOnBothServerFirst_Succeeds_Test()
+        {
+            await TwoWaySync_NewEmptyOnBoth_Succeeds(_serverFolder, _clientFolder);
+        }
+
+        private async Task TwoWaySync_NewEmptyOnBoth_Succeeds(string src, string dst)
+        {
+            var sourceFile = Path.Combine(src, "file1.txt");
+            var targetFile = Path.Combine(dst, "file1.txt");
+
+            File.Create(sourceFile).Close();
+            File.Create(targetFile).Close();
+
+            await _client.Sync();
+
+            Assert.IsTrue(File.Exists(sourceFile), "File was not created");
+            Assert.IsTrue(File.Exists(targetFile), "File was not created");
+
+            Assert.IsTrue(FilesEqual(sourceFile, targetFile), "File content mismatch");
+        }
+
+        [TestMethod]
+        public async Task TwoWaySync_DeleteOnBothClientFirst_Succeeds_Test()
+        {
+            await TwoWaySync_DeleteOnBoth_Succeeds(_clientFolder, _serverFolder);
+        }
+        
+        [TestMethod]
+        public async Task TwoWaySync_DeleteOnBothServerFirst_Succeeds_Test()
+        {
+            await TwoWaySync_DeleteOnBoth_Succeeds(_serverFolder, _clientFolder);
+        }
+
+        private async Task TwoWaySync_DeleteOnBoth_Succeeds(string src, string dst)
+        {
+            var sourceFile = Path.Combine(src, "file1.txt");
+            var targetFile = Path.Combine(dst, "file1.txt");
+
+            File.WriteAllText(sourceFile, "c1");
+
+            await _client.Sync();
+
+            Assert.IsTrue(File.Exists(targetFile), "File was not created");
+            Assert.IsTrue(FilesEqual(sourceFile, targetFile), "File content mismatch");
+
+            File.Delete(sourceFile);
+            File.Delete(targetFile);
+
+            await _client.Sync();
+        }
+
+        [TestMethod]
+        public async Task TwoWaySync_DeleteOnFirstEditSecondClientFirst_Succeeds_Test()
+        {
+            await TwoWaySync_DeleteOnFirstEditSecond_Succeeds(_clientFolder, _serverFolder, "_FromServer");
+        }
+        
+        [TestMethod]
+        public async Task TwoWaySync_DeleteOnFirstEditSecondServerFirst_Succeeds_Test()
+        {
+            await TwoWaySync_DeleteOnFirstEditSecond_Succeeds(_serverFolder, _clientFolder, "_FromClient");
+        }
+
+        private async Task TwoWaySync_DeleteOnFirstEditSecond_Succeeds(string src, string dst, string suffix)
+        {
+            var sourceFile = Path.Combine(src, "file1.txt");
+            var targetFile = Path.Combine(dst, "file1.txt");
+
+            File.WriteAllText(sourceFile, "c1");
+
+            await _client.Sync();
+
+            Assert.IsTrue(File.Exists(targetFile), "File was not created");
+            Assert.IsTrue(FilesEqual(sourceFile, targetFile), "File content mismatch");
+
+            File.Delete(sourceFile);
+            File.AppendAllText(targetFile, "cc12");
+
+            await _client.Sync();
+
+            sourceFile = sourceFile.Replace("file1.txt", $"file1{suffix}.txt");
+            targetFile = targetFile.Replace("file1.txt", $"file1{suffix}.txt");
+
+            Assert.IsTrue(File.Exists(sourceFile), "File was not rolled back from other side");
+            Assert.IsTrue(File.Exists(targetFile), "File was not renamed");
+        }
 
         private void PrepareServerClient()
         {
