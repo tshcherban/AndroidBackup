@@ -98,7 +98,7 @@ namespace FileSync.Tests
         {
             await TwoWaySync_DeletedFile_Succeeds(_clientFolder, _serverFolder);
         }
-        
+
         [TestMethod]
         public async Task TwoWaySync_DeletedFileServer_Succeeds_Test()
         {
@@ -129,7 +129,7 @@ namespace FileSync.Tests
         {
             await TwoWaySync_RenamedFile_Succeeds(_clientFolder, _serverFolder);
         }
-        
+
         [TestMethod]
         public async Task TwoWaySync_RenamedFileServer_Succeeds_Test()
         {
@@ -164,7 +164,7 @@ namespace FileSync.Tests
         {
             await TwoWaySync_NewOnBoth_Succeeds(_clientFolder, _serverFolder);
         }
-        
+
         [TestMethod]
         public async Task TwoWaySync_NewDifferentOnBothServerFirst_Succeeds_Test()
         {
@@ -202,7 +202,7 @@ namespace FileSync.Tests
         {
             await TwoWaySync_NewSameOnBoth_Succeeds(_clientFolder, _serverFolder);
         }
-        
+
         [TestMethod]
         public async Task TwoWaySync_NewSameOnBothServerFirst_Succeeds_Test()
         {
@@ -230,7 +230,7 @@ namespace FileSync.Tests
         {
             await TwoWaySync_NewEmptyOnBoth_Succeeds(_clientFolder, _serverFolder);
         }
-        
+
         [TestMethod]
         public async Task TwoWaySync_NewEmptyOnBothServerFirst_Succeeds_Test()
         {
@@ -258,7 +258,7 @@ namespace FileSync.Tests
         {
             await TwoWaySync_DeleteOnBoth_Succeeds(_clientFolder, _serverFolder);
         }
-        
+
         [TestMethod]
         public async Task TwoWaySync_DeleteOnBothServerFirst_Succeeds_Test()
         {
@@ -288,7 +288,7 @@ namespace FileSync.Tests
         {
             await TwoWaySync_DeleteOnFirstEditSecond_Succeeds(_clientFolder, _serverFolder, "_FromServer");
         }
-        
+
         [TestMethod]
         public async Task TwoWaySync_DeleteOnFirstEditSecondServerFirst_Succeeds_Test()
         {
@@ -372,10 +372,7 @@ namespace FileSync.Tests
 
         private static void ClientWrite(string s) => Console.WriteLine($"client: {s}");
 
-        private static void ClientOnErrorEvent(string msg)
-        {
-            Assert.Fail($"client error: {msg}");
-        }
+        private static void ClientOnErrorEvent(string msg) => Assert.Fail($"client error: {msg}");
 
         private static bool FilesEqual(string path1, string path2)
         {
