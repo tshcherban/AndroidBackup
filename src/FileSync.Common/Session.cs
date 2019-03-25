@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Collections.Generic;
 
 namespace FileSync.Common
 {
@@ -16,10 +15,6 @@ namespace FileSync.Common
         public string BaseDir { get; set; }
 
         public string SyncDbDir { get; set; }
-
-        public List<(string, string)> FilesForDeletion { get; } = new List<(string, string)>();
-
-        public List<(string oldPath, string newPath)> FilesForRename { get; } = new List<(string, string)>();
 
         public FileSession FileTransferSession { get; set; }
 

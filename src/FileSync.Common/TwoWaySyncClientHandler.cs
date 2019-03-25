@@ -72,16 +72,16 @@ namespace FileSync.Common
                         await ProcessGetSessionCmd(cmdHeader);
                         break;
                     case Commands.GetSyncListCmd:
-                        await ProcessGetSyncListCmd(cmdHeader);
+                        await ReturnSyncList(cmdHeader);
                         break;
                     case Commands.GetFileCmd:
-                        await ProcessGetFileCmd(cmdHeader);
+                        await SendFileToClient(cmdHeader);
                         break;
                     case Commands.SendFileCmd:
-                        await ProcessSendFileCmd(cmdHeader);
+                        await ReceiveFileFromClient(cmdHeader);
                         break;
                     case Commands.FinishSessionCmd:
-                        await ProcessFinishSessionCmd(cmdHeader);
+                        await FinishSession(cmdHeader);
                         break;
                     case Commands.DisconnectCmd:
                         _connected = false;
@@ -217,7 +217,7 @@ namespace FileSync.Common
             await CommandHelper.WriteCommandResponse(_networkStream, Commands.GetSessionCmd, response);
         }
 
-        private async Task ProcessFinishSessionCmd(CommandHeader cmdHeader)
+        private async Task FinishSession(CommandHeader cmdHeader)
         {
             var sessionId = await NetworkHelper.Read<Guid>(_networkStream, cmdHeader.PayloadLength);
 
@@ -238,15 +238,15 @@ namespace FileSync.Common
             {
                 try
                 {
-                    FinishFileOperationsSession(session);
+                    session.FileHelper.FinishSession();
+
+                    session.SyncDb.Files.RemoveAll(x => x.State == SyncFileState.Deleted);
 
                     foreach (var f in session.SyncDb.Files.Where(x => !string.IsNullOrEmpty(x.NewRelativePath)))
                     {
                         f.RelativePath = f.NewRelativePath;
                         f.NewRelativePath = null;
                     }
-
-                    session.SyncDb.Files.RemoveAll(x => x.State == SyncFileState.Deleted);
 
                     foreach (var f in session.SyncDb.Files)
                     {
@@ -258,77 +258,13 @@ namespace FileSync.Common
                     response.ErrorMsg = e.ToString();
                 }
 
-                //session.SyncDb = SyncDatabase.Initialize(session.BaseDir, session.SyncDbDir);
                 session.SyncDb.Store(session.SyncDbDir);
             }
 
             await CommandHelper.WriteCommandResponse(_networkStream, Commands.FinishSessionCmd, response);
         }
 
-        private void FinishFileOperationsSession(Session session)
-        {
-            var filesToRemove = Directory.GetFiles(session.RemovedDir, "*", SearchOption.AllDirectories);
-            foreach (var f in filesToRemove)
-            {
-                File.Delete(f);
-                var ff = f.Replace(session.RemovedDir, null).TrimStart(Path.DirectorySeparatorChar);
-                var fl = session.SyncDb.Files.FirstOrDefault(x => x.RelativePath == ff);
-                if (fl != null)
-                {
-                    session.SyncDb.Files.Remove(fl);
-                }
-            }
-
-            var newFiles = Directory.GetFiles(session.NewDir, "*", SearchOption.AllDirectories);
-            foreach (var f in newFiles)
-            {
-                var target = f.Replace(session.NewDir, session.BaseDir);
-                if (File.Exists(target))
-                {
-                    File.Delete(target);
-                }
-
-                var targetDir = Path.GetDirectoryName(target);
-                PathHelpers.EnsureDirExists(targetDir);
-
-                File.Move(f, target);
-
-                var relative = f.Replace(session.NewDir, null).TrimStart(Path.DirectorySeparatorChar);
-                var fl = session.SyncDb.Files.FirstOrDefault(x => x.RelativePath == relative);
-                if (fl == null)
-                {
-                    Debugger.Break();
-                }
-                else
-                {
-                    fl.State = SyncFileState.NotChanged;
-                }
-            }
-
-            foreach (var (oldPath, newPath) in session.FilesForRename)
-            {
-                //_log.AppendFormat("Renaming {0} to {1}", oldPath, newPath);
-                var o = Path.Combine(session.BaseDir, oldPath);
-                var n = Path.Combine(session.BaseDir, newPath);
-                File.Move(o, n);
-            }
-
-            if (new DirectoryInfo(session.NewDir).EnumerateFiles("*", SearchOption.AllDirectories).Any())
-            {
-                Debugger.Break(); // all files should be removed by now
-            }
-
-            if (new DirectoryInfo(session.RemovedDir).EnumerateFiles("*", SearchOption.AllDirectories).Any())
-            {
-                Debugger.Break(); // all files should be removed by now
-            }
-
-            Directory.Delete(session.NewDir, true);
-
-            Directory.Delete(session.RemovedDir, true);
-        }
-
-        private async Task ProcessSendFileCmd(CommandHeader cmdHeader)
+        private async Task ReceiveFileFromClient(CommandHeader cmdHeader)
         {
             var request = await NetworkHelper.Read<SendFileRequest>(_networkStream, cmdHeader.PayloadLength);
 
@@ -376,11 +312,13 @@ namespace FileSync.Common
                     session.SyncDb.AddFile(session.BaseDir, request.RelativeFilePath, hashString);
                 }
 
+                session.FileHelper.AddNew(request.RelativeFilePath);
+
                 session.LastAccessTime = DateTime.Now;
             }
         }
 
-        private async Task ProcessGetFileCmd(CommandHeader cmdHeader)
+        private async Task SendFileToClient(CommandHeader cmdHeader)
         {
             var data = await NetworkHelper.Read<GetFileRequest>(_networkStream, cmdHeader.PayloadLength);
 
@@ -414,7 +352,7 @@ namespace FileSync.Common
             }
         }
 
-        private async Task ProcessGetSyncListCmd(CommandHeader cmdHeader)
+        private async Task ReturnSyncList(CommandHeader cmdHeader)
         {
             var remoteData = await NetworkHelper.Read<GetSyncListRequest>(_networkStream, cmdHeader.PayloadLength);
 
@@ -433,7 +371,9 @@ namespace FileSync.Common
             }
             else
             {
-                Msg?.Invoke("Scanning local folder...");
+                try
+                {
+                    Msg?.Invoke("Scanning local folder...");
 
                 var syncDb = GetSyncDb(session.BaseDir, session.SyncDbDir, out var error);
                 if (syncDb == null)
@@ -470,7 +410,7 @@ namespace FileSync.Common
                                     if (localFileInfo.State == SyncFileState.NotChanged ||
                                         localFileInfo.State == SyncFileState.Deleted)
                                     {
-                                        PrepareFileForDeletion(session, localFileInfo);
+                                        session.FileHelper.PrepareForRemove(localFileInfo.RelativePath);
                                     }
                                     else if (localFileInfo.State == SyncFileState.New)
                                     {
@@ -481,7 +421,7 @@ namespace FileSync.Common
                                         var fileExt = Path.GetExtension(localFileInfo.RelativePath);
                                         var newPath = Path.GetFileNameWithoutExtension(localFileInfo.RelativePath) + "_FromServer" + fileExt;
                                         localFileInfo.NewRelativePath = newPath;
-                                        session.FilesForRename.Add((localFileInfo.RelativePath, newPath));
+                                        session.FileHelper.AddRename(localFileInfo.RelativePath, newPath);
                                         syncInfo.ToDownload.Add(localFileInfo);
                                     }
 
@@ -497,7 +437,7 @@ namespace FileSync.Common
                                         fileExt = Path.GetExtension(localFileInfo.RelativePath);
                                         newPath = Path.GetFileNameWithoutExtension(localFileInfo.RelativePath) + "_FromServer" + fileExt;
                                         localFileInfo.NewRelativePath = newPath;
-                                        session.FilesForRename.Add((localFileInfo.RelativePath, newPath));
+                                        session.FileHelper.AddRename(localFileInfo.RelativePath, newPath);
                                         syncInfo.ToDownload.Add(localFileInfo);
                                     }
 
@@ -518,7 +458,7 @@ namespace FileSync.Common
                                         fileExt = Path.GetExtension(localFileInfo.RelativePath);
                                         newPath = Path.GetFileNameWithoutExtension(localFileInfo.RelativePath) + "_FromServer" + fileExt;
                                         localFileInfo.NewRelativePath = newPath;
-                                        session.FilesForRename.Add((localFileInfo.RelativePath, newPath));
+                                        session.FileHelper.AddRename(localFileInfo.RelativePath, newPath);
                                         syncInfo.ToDownload.Add(localFileInfo);
                                     }
                                     else if (localFileInfo.State == SyncFileState.Deleted)
@@ -547,7 +487,10 @@ namespace FileSync.Common
                                             localFileInfo.State = SyncFileState.NotChanged;
                                         }
                                         else
+                                        {
                                             Debugger.Break(); // not possible
+                                            throw new InvalidOperationException("Invalid server state");
+                                        }
                                     }
 
                                     break;
@@ -565,30 +508,14 @@ namespace FileSync.Common
                     session.SyncDb = syncDb;
                     session.LastAccessTime = DateTime.Now;
                 }
+                }
+                catch (Exception e)
+                {
+                    ret.ErrorMsg = e.Message;
+                }
             }
 
             await CommandHelper.WriteCommandResponse(_networkStream, Commands.GetSyncListCmd, ret);
-        }
-
-        private static void PrepareFileForDeletion(Session session, SyncFileInfo localFileInfo)
-        {
-            var filePath = Path.Combine(session.BaseDir, localFileInfo.RelativePath);
-            if (File.Exists(filePath))
-            {
-                var movedFilePath = Path.Combine(session.RemovedDir, localFileInfo.RelativePath);
-                var movedFileDir = Path.GetDirectoryName(movedFilePath);
-                if (movedFileDir == null)
-                {
-                    throw new InvalidOperationException($"Unable to get '{movedFilePath}'s dir");
-                }
-
-                if (!Directory.Exists(movedFileDir))
-                {
-                    Directory.CreateDirectory(movedFileDir);
-                }
-
-                File.Move(filePath, movedFilePath);
-            }
         }
 
         private SyncDatabase GetSyncDb(string baseDir, string syncDbDir, out string error)

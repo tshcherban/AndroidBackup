@@ -346,6 +346,7 @@ namespace FileSync.Tests
 
             _client = SyncClientFactory.GetTwoWay(serverEp, _clientFolder, null, Guid.Empty, Guid.Empty);
             _client.Log += ClientWrite;
+            _client.ErrorEvent += ClientOnErrorEvent;
         }
 
         private void PrepareFolders()
@@ -370,6 +371,11 @@ namespace FileSync.Tests
         private static void ServerWrite(string s) => Console.WriteLine($"server: {s}");
 
         private static void ClientWrite(string s) => Console.WriteLine($"client: {s}");
+
+        private static void ClientOnErrorEvent(string msg)
+        {
+            Assert.Fail($"client error: {msg}");
+        }
 
         private static bool FilesEqual(string path1, string path2)
         {

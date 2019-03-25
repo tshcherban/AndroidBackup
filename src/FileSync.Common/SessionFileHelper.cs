@@ -39,13 +39,14 @@ namespace FileSync.Common
         public void PrepareForRemove(string relativePath)
         {
             var filePath = Path.Combine(_baseDir, relativePath);
+            if (!File.Exists(filePath))
+                return;
+
             var movedFilePath = Path.Combine(_toRemoveDir, relativePath);
 
             var movedFilePathDir = Path.GetDirectoryName(movedFilePath);
             if (movedFilePathDir == null)
-            {
                 throw new InvalidOperationException($"Unable to get '{movedFilePath}'s dir");
-            }
 
             PathHelpers.EnsureDirExists(movedFilePathDir);
 
@@ -94,6 +95,20 @@ namespace FileSync.Common
                 var n = Path.Combine(_baseDir, newPath);
                 File.Move(o, n);
             }
+
+            var dir = Path.Combine(_baseDir, _toRemoveDir);
+            var filesToRemove = Directory.GetFiles(dir, "*", SearchOption.AllDirectories);
+            if (filesToRemove.Length > 0)
+                throw new InvalidOperationException("Files were not removed from temp dir");
+
+            Directory.Delete(dir, true);
+
+            dir = Path.Combine(_baseDir, _newDir);
+            var newFiles = Directory.GetFiles(dir, "*", SearchOption.AllDirectories);
+            if (newFiles.Length > 0)
+                throw new InvalidOperationException("Files were not moved from temp dir");
+
+            Directory.Delete(dir, true);
         }
 
         public void AddRename(string oldPath, string newPath)

@@ -40,6 +40,8 @@ namespace FileSync.Common
             remove => _logEvent -= value;
         }
 
+        public event Action<string> ErrorEvent;
+
         public Task SyncTask { get; private set; } = Task.CompletedTask;
 
         public TwoWaySyncClientImpl(IPEndPoint endpoint, string baseDir, string syncDbDir, Guid clientId, Guid folderId)
@@ -65,7 +67,7 @@ namespace FileSync.Common
                     var success = await client.ConnectAsync(_endpoint.Address, _endpoint.Port).WhenOrTimeout(OperationsTimeout);
                     if (!success)
                     {
-                        OnLog("Connecting to server timed out");
+                        OnLog("Connecting to server timed out", true);
                         return;
                     }
 
@@ -79,7 +81,7 @@ namespace FileSync.Common
             }
             catch (Exception e)
             {
-                OnLog($"Error during sync {e}");
+                OnLog($"Error during sync {e}", true);
             }
         }
 
@@ -94,7 +96,7 @@ namespace FileSync.Common
             var sessionId = await request.Send(_networkStream);
             if (sessionId.HasError)
             {
-                OnLog($"Unable to create sync session. Server response was '{sessionId.ErrorMsg}'");
+                OnLog($"Unable to create sync session. Server response was '{sessionId.ErrorMsg}'", true);
                 return;
             }
 
@@ -111,7 +113,7 @@ namespace FileSync.Common
             var syncDb = GetLocalSyncDb(out var error);
             if (syncDb == null)
             {
-                OnLog(error);
+                OnLog(error, true);
                 return;
             }
 
@@ -120,7 +122,7 @@ namespace FileSync.Common
             var syncList = await GetSyncList(_sessionId, syncDb.Files);
             if (syncList.HasError)
             {
-                OnLog($"Unable to get sync list. Server response was '{syncList.ErrorMsg}'");
+                OnLog($"Unable to get sync list. Server response was '{syncList.ErrorMsg}'", true);
                 return;
             }
 
@@ -142,7 +144,7 @@ namespace FileSync.Common
             var response = await FinishServerSession(_sessionId);
             if (response.HasError)
             {
-                OnLog($"Error finishing session. Server response was '{response.ErrorMsg}'");
+                OnLog($"Error finishing session. Server response was '{response.ErrorMsg}'", true);
 
                 return;
             }
@@ -158,6 +160,7 @@ namespace FileSync.Common
                 if (fi != null)
                 {
                     fi.RelativePath = tu.NewRelativePath;
+                    fi.NewRelativePath = null;
                 }
                 else
                     Debugger.Break();
@@ -171,20 +174,6 @@ namespace FileSync.Common
             syncDb.Store(_syncDbDir);
 
             File.WriteAllText(Path.Combine(_syncDbDir, $"sync-{DateTime.Now:dd-MM-yyyy_hh-mm-ss}.log"), _log.ToString());
-
-            if (new DirectoryInfo(_newDir).EnumerateFiles("*", SearchOption.AllDirectories).Any())
-            {
-                Debugger.Break(); // all files should be removed by now
-            }
-
-            if (new DirectoryInfo(_toRemoveDir).EnumerateFiles("*", SearchOption.AllDirectories).Any())
-            {
-                Debugger.Break(); // all files should be removed by now
-            }
-
-            Directory.Delete(_newDir, true);
-
-            Directory.Delete(_toRemoveDir, true);
 
             await NetworkHelper.WriteCommandHeader(_networkStream, Commands.DisconnectCmd);
 
@@ -202,7 +191,7 @@ namespace FileSync.Common
 
                 _sessionFileHelper.PrepareForRemove(fileInfo.RelativePath);
 
-                var fi = syncDb.Files.First(x => x.RelativePath == fileInfo.RelativePath);
+                var fi = syncDb.Files.Single(x => x.RelativePath == fileInfo.RelativePath);
                 syncDb.Files.Remove(fi);
             }
         }
@@ -394,9 +383,11 @@ namespace FileSync.Common
             syncDb.Files.AddRange(localInfos);
         }
 
-        private void OnLog(string msg)
+        private void OnLog(string msg, bool error = false)
         {
             _logEvent?.Invoke(msg);
+            if (error)
+                ErrorEvent?.Invoke(msg);
         }
     }
 }
